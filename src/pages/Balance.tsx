@@ -252,7 +252,7 @@ export default function Balance() {
             {weapon && (
               <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.8 }}>
                 <div>🗡️ Damage: <strong style={{ color: 'var(--color-text)' }}>{weapon.damage}</strong></div>
-                <div>🎯 Hit modifier: <strong style={{ color: 'var(--color-text)' }}>{weapon.hitRateBonus > 0 ? '+' : ''}{weapon.hitRateBonus}%</strong> (multiplicative)</div>
+                <div>🎯 Hit modifier: <strong style={{ color: 'var(--color-text)' }}>{(weapon.hitRateBonus ?? 0) > 0 ? '+' : ''}{weapon.hitRateBonus ?? 0}%</strong> (multiplicative)</div>
                 <div>💥 Shots/round: <strong style={{ color: 'var(--color-text)' }}>{spr}</strong></div>
                 <div>⚖️ Weight: <strong style={{ color: 'var(--color-text)' }}>{(weapon as any).weight ?? '?'} lb</strong></div>
                 <div style={{ marginTop: 6, fontStyle: 'italic' }}>{weapon.description}</div>

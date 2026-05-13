@@ -919,7 +919,7 @@ function trySellEquipment(
     }
     const price = Math.floor((eq.price ?? 0) * 0.5);
     if (price <= 0) continue;
-    store.sellEquipment(eq.inventoryId);
+    store.sellEquipment(eq.inventoryId!);
     return `Sold ${eq.name} [${eq.slot}] for ${price}💰`;
   }
   return null;

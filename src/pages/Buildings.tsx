@@ -12,7 +12,7 @@ const craftableItems = allEquipment.filter(e => e.craftable);
 
 export default function Buildings() {
   const { mbase, setMBase, buildings, setBuilding, maidens, inventory,
-    craftEquipment, buyHQEquipment, sellEquipment, toggleItemLock, meridianStats } = useGameStore();
+    craftEquipment, buyHQEquipment, sellEquipment, toggleItemLock } = useGameStore();
   const [openBuildingId, setOpenBuildingId] = useState<string | null>(null);
 
   function upgrade(buildingId: string) {
@@ -888,8 +888,6 @@ function MeridianPanel({ building }: any) {
     const factor = Math.max(0.05, Math.pow(1 - dr, exp));
     return { i, dr, factor, label: `×${factor.toFixed(3)}` };
   });
-
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   const sep = <div style={{ borderTop: '1px solid #2a2820', margin: '5px 0' }} />;
   const dim = (t: string) => <span style={{ color: 'var(--color-text-muted)' }}>{t}</span>;

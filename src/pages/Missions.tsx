@@ -614,8 +614,8 @@ function MissionDetail({ mission, teams, maidens, onStartMission, onClose }: any
       {mission.capturedMaidenIds?.length > 0 && (() => {
         // Filter to only show truly captured maidens, excluding those who escaped (have moraleQuitStatus === 'escaped')
         const capturedMaidens = mission.capturedMaidenIds
-          .map((id: string) => maidens.find((m: Maiden) => m.id === id))
-          .filter((m): m is Maiden => Boolean(m) && m.isCaptured && m.moraleQuitStatus !== 'escaped');
+          .map((id: string) => maidens.find((m: Maiden) => m.id === id) as Maiden | undefined)
+          .filter((m: Maiden | undefined): m is Maiden => Boolean(m) && (m as Maiden).isCaptured && (m as Maiden).moraleQuitStatus !== 'escaped');
         return (
           <div style={{ background: 'rgba(184,64,64,0.12)', border: '1px solid var(--color-danger)', borderRadius: 6, padding: 10, marginBottom: 16 }}>
             <div style={{ fontSize: 11, color: '#e88', fontWeight: 'bold', marginBottom: capturedMaidens.length > 0 ? 8 : 0 }}>

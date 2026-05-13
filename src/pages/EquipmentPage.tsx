@@ -53,7 +53,7 @@ export default function EquipmentPage() {
       if (existing) {
         existing.equippedCount++;
       } else {
-        stockMap.set(eq.id, { item: eq, baseCount: 0, equippedCount: 1 });
+        stockMap.set(eq.id, { item: eq, baseCount: 0, equippedCount: 1, lockedCount: 0 });
       }
     }
   }
