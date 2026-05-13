@@ -1,0 +1,61 @@
+[
+  {
+    "id": "basic_rifle_training",
+    "name": "Basic Rifle Training",
+    "description": "Completed mandatory marksmanship training. Steady aim under pressure.",
+    "bonuses": [{ "label": "Hit Rate", "value": 5, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "primary_scout",
+    "name": "Primary Scout",
+    "description": "Trained in advance reconnaissance. Moves quietly and spots enemies early.",
+    "bonuses": [{ "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }],
+    "ability": "scout_advance"
+  },
+  {
+    "id": "private",
+    "name": "Private",
+    "description": "Rank: Private. Entry level combatant.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "corporal",
+    "name": "Corporal",
+    "description": "Rank: Corporal. Shows initiative and leads small fire-teams.",
+    "bonuses": [{ "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "sergeant",
+    "name": "Sergeant",
+    "description": "Rank: Sergeant. Hardened veteran respected by peers.",
+    "bonuses": [
+      { "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false },
+      { "label": "Charm", "value": 1, "stat": "charm", "isPercent": false }
+    ],
+    "ability": "inspire"
+  },
+  {
+    "id": "sharpshooter",
+    "name": "Sharpshooter",
+    "description": "Awarded after 100 confirmed takedowns. Deadly accuracy at range.",
+    "bonuses": [{ "label": "Hit Rate", "value": 10, "stat": "hitRate", "isPercent": true }],
+    "ability": "headshot_trained"
+  },
+  {
+    "id": "iron_will",
+    "name": "Iron Will",
+    "description": "Survived a near-fatal wound in the field. Resilience beyond normal limits.",
+    "bonuses": [{ "label": "HP", "value": 5, "stat": "hp", "isPercent": false }],
+    "ability": "last_stand"
+  },
+  {
+    "id": "field_medic",
+    "name": "Field Medic",
+    "description": "Certified to administer first aid under fire.",
+    "bonuses": [],
+    "ability": "field_heal"
+  }
+]

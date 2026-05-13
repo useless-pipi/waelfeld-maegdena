@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Private image assets (not distributed in v0 branches)
+public/imgs/chars/
+public/imgs/enemy/

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "scouting_team",
+    "name": "Scouting Team",
+    "description": "A tight squad of scouts. Requires at least 2 members with Primary Scout qualification.",
+    "requirements": [
+      { "type": "qualification", "qualificationId": "primary_scout", "minCount": 2 }
+    ],
+    "bonuses": [{ "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false }]
+  },
+  {
+    "id": "heavy_assault",
+    "name": "Heavy Assault",
+    "description": "Brute-force offensive formation. Requires at least 3 members with Basic Rifle Training.",
+    "requirements": [
+      { "type": "qualification", "qualificationId": "basic_rifle_training", "minCount": 3 }
+    ],
+    "bonuses": [{ "label": "Hit Rate", "value": 5, "stat": "hitRate", "isPercent": true }]
+  },
+  {
+    "id": "iron_fist",
+    "name": "Iron Fist",
+    "description": "A resilient formation built around veterans. Requires at least 2 Sergeants.",
+    "requirements": [
+      { "type": "qualification", "qualificationId": "sergeant", "minCount": 2 }
+    ],
+    "bonuses": [
+      { "label": "HP", "value": 3, "stat": "hp", "isPercent": false },
+      { "label": "Dodge", "value": 3, "stat": "dodge", "isPercent": true }
+    ]
+  },
+  {
+    "id": "medic_unit",
+    "name": "Medic Unit",
+    "description": "Keeps the squad alive. Requires at least 1 Field Medic.",
+    "requirements": [
+      { "type": "qualification", "qualificationId": "field_medic", "minCount": 1 }
+    ],
+    "bonuses": [{ "label": "HP", "value": 5, "stat": "hp", "isPercent": false }]
+  },
+  {
+    "id": "standard_patrol",
+    "name": "Standard Patrol",
+    "description": "A balanced patrol unit. Requires at least 4 members.",
+    "requirements": [
+      { "type": "minMembers", "minCount": 4 }
+    ],
+    "bonuses": [{ "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false }]
+  }
+]
