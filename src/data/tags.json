@@ -1,0 +1,600 @@
+﻿[
+  {
+    "id": "heroine",
+    "name": "Heroine",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "A unique named individual of exceptional capability. Heroines are irreplaceable — losing one is a permanent blow to the unit.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "noble",
+    "name": "Noble",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Of aristocratic birth. Commands natural authority but may clash with common soldiers.",
+    "bonuses": [{ "label": "Charm", "value": 1, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "elite",
+    "name": "Elite",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "A cut above the standard rank and file. Brings exceptional skill to every engagement.",
+    "bonuses": [{ "label": "Hit Rate", "value": 5, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "scout",
+    "name": "Scout",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Trained for advance reconnaissance. Heightened field awareness and quiet movement.",
+    "bonuses": [{ "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "sniper",
+    "name": "Sniper",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Specialist long-range shooter. Exceptional accuracy at distance.",
+    "bonuses": [{ "label": "Hit Rate", "value": 8, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "tactician",
+    "name": "Tactician",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Analytical battlefield thinker. Reads enemy movements and plans accordingly.",
+    "bonuses": [{ "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "leader",
+    "name": "Leader",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "A natural commander who inspires those around her. Keeps morale stable under pressure.",
+    "bonuses": [{ "label": "Charm", "value": 2, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "vanguard",
+    "name": "Vanguard",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Front-line specialist built to lead the charge and absorb punishment.",
+    "bonuses": [{ "label": "HP", "value": 4, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "tough",
+    "name": "Tough",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Unusually durable. Takes hits that would floor others and keeps fighting.",
+    "bonuses": [{ "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "aggressive",
+    "name": "Aggressive",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Fights with relentless forward pressure. Prefers attack over caution.",
+    "bonuses": [{ "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "loyal",
+    "name": "Loyal",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Unswerving devotion to her unit. Stands firm when others waver.",
+    "bonuses": [{ "label": "Charm", "value": 1, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "calm",
+    "name": "Calm",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Cool-headed under fire. Stress and chaos do not rattle her composure.",
+    "bonuses": [{ "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "alert",
+    "name": "Alert",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Constantly vigilant. Hard to ambush and quick to spot enemy movement.",
+    "bonuses": [{ "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "careful",
+    "name": "Careful",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Methodical and deliberate. Rarely makes mistakes under pressure.",
+    "bonuses": [{ "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "steady",
+    "name": "Steady",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "A reliable presence in any engagement. Consistent performance regardless of conditions.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "swift",
+    "name": "Swift",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Faster on her feet than most. Hard to pin down and quick to reposition.",
+    "bonuses": [{ "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "tactical",
+    "name": "Tactical",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Situationally aware and adaptive. Applies the right approach to each situation.",
+    "bonuses": [{ "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "balanced",
+    "name": "Balanced",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "No obvious weaknesses and no flashy strengths. A solid all-rounder.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "reliable",
+    "name": "Reliable",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Shows up and gets it done. Low drama, consistent output.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "marksman",
+    "name": "Marksman",
+    "category": "positive",
+    "isRecruit": true,
+    "description": "Precision-focused shooter. Trained to land shots on difficult targets.",
+    "bonuses": [{ "label": "Hit Rate", "value": 6, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "angry",
+    "name": "Angry",
+    "category": "double_edged",
+    "isRecruit": true,
+    "description": "Fuelled by barely-contained fury. Hits harder but less accurately when enraged.",
+    "bonuses": [
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false },
+      { "label": "Hit Rate", "value": -5, "stat": "hitRate", "isPercent": true }
+    ],
+    "ability": null
+  },
+  {
+    "id": "impulsive",
+    "name": "Impulsive",
+    "category": "double_edged",
+    "isRecruit": true,
+    "description": "Acts first, thinks second. Explosive in a brawl but liable to break formation.",
+    "bonuses": [
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": -1, "stat": "strategy", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "paranoid",
+    "name": "Paranoid",
+    "category": "double_edged",
+    "isRecruit": true,
+    "description": "Sees threats everywhere. Hard to surprise but difficult to coordinate with.",
+    "bonuses": [
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false },
+      { "label": "Charm", "value": -1, "stat": "charm", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "reckless",
+    "name": "Reckless",
+    "category": "double_edged",
+    "isRecruit": true,
+    "description": "Charges without hesitation. Fast and aggressive but takes unnecessary risks.",
+    "bonuses": [
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false },
+      { "label": "HP", "value": -2, "stat": "hp", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "timid",
+    "name": "Timid",
+    "category": "negative",
+    "isRecruit": true,
+    "description": "Hesitates under fire. Struggles to commit when the pressure mounts.",
+    "bonuses": [{ "label": "Hit Rate", "value": -5, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "stubborn",
+    "name": "Stubborn",
+    "category": "negative",
+    "isRecruit": true,
+    "description": "Resistant to orders she disagrees with. Struggles in disciplined coordinated operations.",
+    "bonuses": [{ "label": "Strategy", "value": -1, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "frail",
+    "name": "Frail",
+    "category": "negative",
+    "isRecruit": true,
+    "description": "Slight build that leaves her more vulnerable to damage than her peers.",
+    "bonuses": [{ "label": "HP", "value": -2, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "anxious",
+    "name": "Anxious",
+    "category": "negative",
+    "isRecruit": true,
+    "description": "Nerves get the better of her in tense situations. Hard to keep composure under sustained fire.",
+    "bonuses": [{ "label": "Charm", "value": -1, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "patrol",
+    "name": "Patrol",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Standard patrol unit. Covers assigned territory but lacks specialisation.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "grunt",
+    "name": "Grunt",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Basic rank-and-file combatant. Quantity over quality.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "guard",
+    "name": "Guard",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Assigned to fixed defensive positions. Disciplined and hard to dislodge.",
+    "bonuses": [{ "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "sergeant",
+    "name": "Sergeant",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Low-level field commander. More experienced and harder than a grunt.",
+    "bonuses": [{ "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "veteran",
+    "name": "Veteran",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Hardened by many campaigns. Fights calmly and efficiently.",
+    "bonuses": [{ "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }, { "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "raider",
+    "name": "Raider",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Specialist in fast, violent attacks. Hits hard and withdraws quickly.",
+    "bonuses": [{ "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "captain",
+    "name": "Captain",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Mid-tier field officer. Leads squads with authority and tactical awareness.",
+    "bonuses": [{ "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "commander",
+    "name": "Commander",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Senior field commander. A dangerous, experienced opponent.",
+    "bonuses": [{ "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }, { "label": "Charm", "value": 2, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "boss",
+    "name": "Boss",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "A major enemy leader. Significantly more capable than standard units.",
+    "bonuses": [{ "label": "HP", "value": 6, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "champion",
+    "name": "Champion",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Peak combatant. The best the enemy has to offer in direct combat.",
+    "bonuses": [{ "label": "Strength", "value": 3, "stat": "strength", "isPercent": false }, { "label": "Hit Rate", "value": 10, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "enforcer",
+    "name": "Enforcer",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Brutal close-range specialist tasked with crushing resistance.",
+    "bonuses": [{ "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }, { "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "warden",
+    "name": "Warden",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Assigned to guard prisoners or key facilities. Knows the terrain intimately.",
+    "bonuses": [{ "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "jailor",
+    "name": "Jailor",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Specialist in captive management. Ruthless and effective at suppression.",
+    "bonuses": [{ "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "shadow",
+    "name": "Shadow",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Operates in stealth and darkness. Difficult to detect before it is too late.",
+    "bonuses": [{ "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "assassin",
+    "name": "Assassin",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Trained for targeted elimination. Extremely high accuracy, strikes without warning.",
+    "bonuses": [{ "label": "Hit Rate", "value": 12, "stat": "hitRate", "isPercent": true }, { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "dangerous",
+    "name": "Dangerous",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "A heightened threat. Treat with extreme caution.",
+    "bonuses": [{ "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }, { "label": "Hit Rate", "value": 5, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "undead",
+    "name": "Undead",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Neither fully alive nor dead. Driven by Lyssa's will and immune to morale effects.",
+    "bonuses": [],
+    "ability": "morale_immune"
+  },
+  {
+    "id": "lyssa",
+    "name": "Lyssa",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "An ancient undying warrior. Cannot be killed — she is pinned to 1 HP when brought low and becomes stunned.",
+    "bonuses": [],
+    "ability": "lyssa_undying"
+  },
+  {
+    "id": "fortress",
+    "name": "Fortress",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Dug into a hardened defensive position. Extremely difficult to dislodge.",
+    "bonuses": [{ "label": "HP", "value": 8, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "rampart",
+    "name": "Rampart",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Guards a fortified wall or barrier. Benefits from elevated cover.",
+    "bonuses": [{ "label": "HP", "value": 4, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "spire",
+    "name": "Spire",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Tower-positioned sniper or lookout. Extended sightlines and superior vantage.",
+    "bonuses": [{ "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "thornwall",
+    "name": "Thornwall",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Entrenched behind dense cover. Extremely hard to hit.",
+    "bonuses": [],
+    "ability": null
+  },
+  {
+    "id": "marsh",
+    "name": "Marsh",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Operates in wetland terrain. Accustomed to poor footing and limited visibility.",
+    "bonuses": [{ "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "trench",
+    "name": "Trench",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Dug into trench fortifications. Extremely defensible position.",
+    "bonuses": [{ "label": "HP", "value": 3, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "picket",
+    "name": "Picket",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Outer-perimeter sentry. First contact role with above-average alertness.",
+    "bonuses": [{ "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "overlord",
+    "name": "Overlord",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Supreme enemy commander. The pinnacle of the opposing force.",
+    "bonuses": [{ "label": "Strategy", "value": 4, "stat": "strategy", "isPercent": false }, { "label": "HP", "value": 10, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "berserk",
+    "name": "Berserk",
+    "category": "double_edged",
+    "isRecruit": false,
+    "description": "Attacks with savage force but wild abandon. Devastating damage, terrible accuracy.",
+    "bonuses": [
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Hit Rate", "value": -15, "stat": "hitRate", "isPercent": true }
+    ],
+    "ability": null
+  },
+  {
+    "id": "overconfident",
+    "name": "Overconfident",
+    "category": "double_edged",
+    "isRecruit": false,
+    "description": "Underestimates the opposition. Hits harder but is sloppy about defence.",
+    "bonuses": [
+      { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": -1, "stat": "strategy", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "demoralized",
+    "name": "Demoralized",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Spirit broken by repeated setbacks. Fights without conviction or cohesion.",
+    "bonuses": [
+      { "label": "Charm", "value": -2, "stat": "charm", "isPercent": false },
+      { "label": "Strategy", "value": -1, "stat": "strategy", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "sloppy",
+    "name": "Sloppy",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Poor fire discipline. Shots go wide far more often than they should.",
+    "bonuses": [{ "label": "Hit Rate", "value": -8, "stat": "hitRate", "isPercent": true }],
+    "ability": null
+  },
+  {
+    "id": "wounded",
+    "name": "Wounded",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Already sustaining injuries before the engagement begins. HP is reduced.",
+    "bonuses": [{ "label": "HP", "value": -3, "stat": "hp", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "Coward",
+    "name": "Coward",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Broke under pressure and fled the battlefield when morale collapsed. Her nerves are shot.",
+    "bonuses": [{ "label": "Charm", "value": -2, "stat": "charm", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "Thrall",
+    "name": "Thrall",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Was captured by the enemy and bears the mark of captivity. Diminished in spirit and standing.",
+    "bonuses": [{ "label": "Strategy", "value": -2, "stat": "strategy", "isPercent": false }],
+    "ability": null
+  },
+  {
+    "id": "Rescued",
+    "name": "Rescued",
+    "category": "positive",
+    "isRecruit": false,
+    "description": "Was captured mid-battle but pulled back by her own team. The experience forged a deep bond with her comrades and sharpened her resolve.",
+    "bonuses": [
+      { "label": "Charm", "value": 1, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "ability": null
+  },
+  {
+    "id": "untrained",
+    "name": "Untrained",
+    "category": "negative",
+    "isRecruit": false,
+    "description": "Rushed into service without proper training. Lacks the fundamentals expected of a Waelfeld maiden — weaker, slower, less resilient, and easily unnerved. All stats are permanently reduced by 2.",
+    "bonuses": [
+      { "label": "Strength",    "value": -2, "stat": "strength",    "isPercent": false },
+      { "label": "Dexterity",   "value": -2, "stat": "dexterity",   "isPercent": false },
+      { "label": "Constitution","value": -2, "stat": "constitution","isPercent": false },
+      { "label": "Strategy",    "value": -2, "stat": "strategy",    "isPercent": false },
+      { "label": "Awareness",   "value": -2, "stat": "awareness",   "isPercent": false },
+      { "label": "Charm",       "value": -2, "stat": "charm",       "isPercent": false }
+    ],
+    "ability": null
+  }
+]
