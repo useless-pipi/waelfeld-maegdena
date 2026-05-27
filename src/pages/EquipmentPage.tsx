@@ -6,14 +6,47 @@ import type { Equipment } from '../types/equipment';
 const SLOT_LABELS: Record<string, string> = {
   weapon: '🔫 Weapon',
   head: '🪖 Head',
+  mask: '🎭 Mask',
   body: '🧥 Body',
+  arms: '🧤 Arms',
   legs: '👢 Legs',
   accessory: '🔭 Accessory',
   medal: '🎖️ Medal',
   consumable: '🧪 Consumable',
 };
 
-const SLOT_ORDER = ['weapon', 'head', 'body', 'legs', 'accessory', 'medal', 'consumable'];
+const SLOT_ORDER = ['weapon', 'head', 'mask', 'body', 'arms', 'legs', 'accessory', 'medal', 'consumable'];
+
+// ── Rarity helpers ────────────────────────────────────────────────────────────
+const RARITY_COLOR = ['', 'var(--color-text-muted)', '#6db86d', '#4a9eff', '#a06fd8', '#e08080'];
+const RARITY_LABEL = ['', '⚪ Common', '🟢 Uncommon', '🔵 Rare', '🟣 Very Rare', '🔴 Legendary'];
+const RARITY_BORDER = ['', 'var(--color-border)', '#4a8a4a', '#4a7abf', '#8a50c8', '#c84a4a'];
+function getRV(item: Equipment): number {
+  return (item as any).rarityValue ?? (item.isRare ? 3 : 1);
+}
+
+// ── Rating helper ────────────────────────────────────────────────────────────────────────
+function rateItem(item: Equipment): number {
+  let score = 0;
+  for (const b of item.bonuses) {
+    const s = b.stat.toLowerCase();
+    const weight =
+      s === 'strength' || s === 'dexterity' || s === 'constitution' ? 2.0
+      : s === 'awareness' || s === 'strategy' ? 1.5
+      : s === 'charm' || s === 'hp' ? 1.0
+      : s === 'hitrate' || s === 'dodge' ? 1.5
+      : b.isPercent ? 0.5 : 1.0;
+    score += b.value * weight;
+  }
+  if (item.slot === 'weapon') {
+    score += (item.damage ?? 0) * 2;
+    score += ((item.shotsPerRound ?? 1) - 1) * 5;
+    score += (item.hitRateBonus ?? 0) * 0.5;
+  } else if (item.hitRateBonus !== undefined) {
+    score += item.hitRateBonus * 1.5;
+  }
+  return Math.round(score);
+}
 
 const WEAPON_TYPE_LABELS: Record<string, string> = {
   rifle: 'Rifle',
@@ -163,7 +196,7 @@ function EquipmentCard({
       onClick={onClick}
       style={{
         background: 'var(--color-surface)',
-        border: `1px solid ${item.isRare ? '#c0392b' : 'var(--color-border)'}`,
+        border: `1px solid ${RARITY_BORDER[getRV(item)]}`,
         borderRadius: 8,
         padding: '10px 12px',
         cursor: 'pointer',
@@ -172,11 +205,11 @@ function EquipmentCard({
         transition: 'border-color 0.15s',
       }}
       onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = item.isRare ? '#c0392b' : 'var(--color-border)')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = RARITY_BORDER[getRV(item)])}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: item.isRare ? '#e74c3c' : 'var(--color-text)' }}>
-          {item.isRare && '⭐ '}{item.name}
+        <span style={{ fontSize: 13, fontWeight: 700, color: RARITY_COLOR[getRV(item)] }}>
+          {item.name}
         </span>
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)', whiteSpace: 'nowrap', marginLeft: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
           {lockedCount > 0 && <span title={`${lockedCount} locked`} style={{ fontSize: 12 }}>🔒</span>}
@@ -206,6 +239,7 @@ function EquipmentCard({
             color={b.value >= 0 ? '#27ae60' : '#e74c3c'}
           />
         ))}
+        <StatChip label={`⚡ ${rateItem(item)}`} color="#7ab" />
       </div>
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 6 }}>
         {baseCount > 0 && <span>🏠 {baseCount} in stock</span>}
@@ -254,7 +288,7 @@ function EquipmentDetailModal({ item, onClose }: { item: Equipment; onClose: () 
         onClick={e => e.stopPropagation()}
         style={{
           background: 'var(--color-surface)',
-          border: `1px solid ${item.isRare ? '#c0392b' : 'var(--color-border)'}`,
+          border: `1px solid ${RARITY_BORDER[getRV(item)]}`,
           borderRadius: 10,
           padding: 24,
           maxWidth: 480,
@@ -266,13 +300,13 @@ function EquipmentDetailModal({ item, onClose }: { item: Equipment; onClose: () 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: item.isRare ? '#e74c3c' : 'var(--color-text)' }}>
-              {item.isRare && '⭐ '}{item.name}
+            <div style={{ fontSize: 18, fontWeight: 700, color: RARITY_COLOR[getRV(item)] }}>
+              {item.name}
             </div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
               {SLOT_LABELS[item.slot] ?? item.slot}
               {item.weaponType && ` · ${WEAPON_TYPE_LABELS[item.weaponType] ?? item.weaponType}`}
-              {item.isRare && ' · Rare'}
+              {getRV(item) > 1 && ` · ${RARITY_LABEL[getRV(item)]}`}
             </div>
           </div>
           <button

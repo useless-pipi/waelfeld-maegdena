@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { Stage, Layer, Image as KonvaImage, Rect, Text, Group } from 'react-konva';
 import { useGameStore } from '../store/gameStore';
 import { getMaidenIcon, getMaidenPortrait } from '../utils/portraits';
@@ -31,8 +32,9 @@ function TagTooltip({ tagId }: { tagId: string }) {
   const categoryStyle = def?.category ? (TAG_CATEGORY_STYLE[def.category] ?? null) : null;
 
   function handleMouseEnter(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPos({ x: rect.left, y: rect.bottom + 6 });
+    setPos({ x: rect.left / zoom, y: (rect.bottom + 6) / zoom });
     setVisible(true);
   }
 
@@ -99,12 +101,195 @@ const COLS = 5;
 const SLOT_LABEL: Record<string, string> = {
   weapon: 'Weapon',
   head: 'Head',
+  mask: 'Mask',
   body: 'Body',
+  arms: 'Arms',
   legs: 'Legs',
   accessory: 'Accessory',
   consumable: 'Consumable',
   medal: 'Medal',
 };
+
+// Rarity colours indexed by rarityValue (1–5)
+const RARITY_COLORS_CARD: Record<number, string> = {
+  1: 'var(--color-border)',
+  2: '#4a8a4a',
+  3: '#4a7abf',
+  4: '#8a50c8',
+  5: '#c84a4a',
+};
+
+// ── Rating helper (shared with mission auto-equip logic) ─────────────────────
+function rateItem(item: Equipment): number {
+  let score = 0;
+  for (const b of item.bonuses) {
+    const s = b.stat.toLowerCase();
+    const weight =
+      s === 'strength' || s === 'dexterity' || s === 'constitution' ? 2.0
+      : s === 'awareness' || s === 'strategy' ? 1.5
+      : s === 'charm' || s === 'hp' ? 1.0
+      : s === 'hitrate' || s === 'dodge' ? 1.5
+      : b.isPercent ? 0.5 : 1.0;
+    score += b.value * weight;
+  }
+  if (item.slot === 'weapon') {
+    score += (item.damage ?? 0) * 2;
+    score += ((item.shotsPerRound ?? 1) - 1) * 5;
+    score += (item.hitRateBonus ?? 0) * 0.5;
+  } else if (item.hitRateBonus !== undefined) {
+    score += item.hitRateBonus * 1.5;
+  }
+  return Math.round(score);
+}
+
+// ── Body-map: visual slot overview ──────────────────────────────────────────
+const BODY_MAP_SLOTS: { slot: string; icon: string }[] = [
+  { slot: 'head',      icon: '🪖' },
+  { slot: 'mask',      icon: '🎭' },
+  { slot: 'body',      icon: '🧥' },
+  { slot: 'arms',      icon: '🧤' },
+  { slot: 'legs',      icon: '👢' },
+  { slot: 'weapon',    icon: '🔫' },
+  { slot: 'accessory', icon: '🔭' },
+  { slot: 'medal',     icon: '🎖️' },
+  { slot: 'consumable',icon: '🧪' },
+];
+const EXCLUSIVE_BODY_SLOTS = ['head', 'mask', 'body', 'arms', 'legs', 'weapon'];
+const LIST_BODY_SLOTS = ['accessory', 'medal', 'consumable'];
+
+// ── BodyMap row wrapper — handles tooltip hover state per row ────────────────
+function BodyMapRow({ item, children, onRowClick }: {
+  item: Equipment | null;
+  children: React.ReactNode;
+  onRowClick: () => void;
+}) {
+  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null);
+  function tipPos(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+    return { x: e.clientX / zoom, y: e.clientY / zoom };
+  }
+  return (
+    <div
+      onClick={onRowClick}
+      onMouseEnter={e => item && setTooltip(tipPos(e))}
+      onMouseMove={e => item && setTooltip(tipPos(e))}
+      onMouseLeave={() => setTooltip(null)}
+    >
+      {children}
+      {tooltip && item && <EquipTooltip eq={item} x={tooltip.x} y={tooltip.y} />}
+    </div>
+  );
+}
+
+function BodyMap({ equipped, onUnequip, onToggleLock, onSelectEmptySlot }: {
+  equipped: Equipment[];
+  onUnequip: (eq: Equipment) => void;
+  onToggleLock: (id: string) => void;
+  onSelectEmptySlot?: (slot: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 14 }}>
+
+      {/* Exclusive slots — one row each, single item */}
+      {BODY_MAP_SLOTS.filter(s => EXCLUSIVE_BODY_SLOTS.includes(s.slot)).map(({ slot, icon }) => {
+        const item = equipped.find(e => e.slot === slot) ?? null;
+        return (
+          <BodyMapRow key={slot} item={item} onRowClick={() => { if (item) onUnequip(item); else onSelectEmptySlot?.(slot); }}>
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: item ? 'rgba(200,149,74,0.12)' : '#0e0d0b',
+                border: `1px solid ${item ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                borderRadius: 5, padding: '5px 8px', cursor: 'pointer', position: 'relative',
+                minHeight: 32,
+              }}
+            >
+              <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', width: 62, flexShrink: 0 }}>
+                {icon} {SLOT_LABEL[slot]}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: item ? 600 : 400, color: item ? 'var(--color-text)' : '#555', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: item ? 'normal' : 'italic' }}>
+                  {item ? item.name : 'empty'}
+                </div>
+                {item && <div style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>⚡ {rateItem(item)}</div>}
+              </div>
+              {item && (
+                <button
+                  onClick={e => { e.stopPropagation(); onToggleLock(item.inventoryId ?? item.id); }}
+                  title={item.isLocked ? 'Unlock (allow selling)' : 'Lock (prevent selling)'}
+                  style={{ background: item.isLocked ? 'rgba(200,149,74,0.85)' : 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 3, padding: '1px 4px', cursor: 'pointer', fontSize: 9, lineHeight: 1.4, color: item.isLocked ? '#1a1713' : '#888', flexShrink: 0 }}
+                >{item.isLocked ? '🔒' : '🔓'}</button>
+              )}
+            </div>
+          </BodyMapRow>
+        );
+      })}
+
+      {/* List slots — accessory / medal / consumable */}
+      {BODY_MAP_SLOTS.filter(s => LIST_BODY_SLOTS.includes(s.slot)).map(({ slot, icon }) => {
+        const items = equipped.filter(e => e.slot === slot);
+        // Group by name
+        const groups: { name: string; representative: Equipment; count: number }[] = [];
+        const nameIdx = new Map<string, number>();
+        for (const eq of items) {
+          const existing = nameIdx.get(eq.name);
+          if (existing !== undefined) { groups[existing].count += 1; }
+          else { nameIdx.set(eq.name, groups.length); groups.push({ name: eq.name, representative: eq, count: 1 }); }
+        }
+
+        if (groups.length === 0) {
+          return (
+            <BodyMapRow key={slot} item={null} onRowClick={() => onSelectEmptySlot?.(slot)}>
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: '#0e0d0b', border: '1px solid var(--color-border)',
+                  borderRadius: 5, padding: '5px 8px', cursor: 'pointer', minHeight: 32,
+                }}
+              >
+                <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', width: 62, flexShrink: 0 }}>
+                  {icon} {SLOT_LABEL[slot]}
+                </div>
+                <div style={{ fontSize: 9, color: '#555', fontStyle: 'italic' }}>empty</div>
+              </div>
+            </BodyMapRow>
+          );
+        }
+
+        return groups.map(({ representative: item, count }, gi) => (
+          <BodyMapRow key={`${slot}-${gi}`} item={item} onRowClick={() => onUnequip(item)}>
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'rgba(200,149,74,0.10)',
+                border: '1px solid var(--color-accent)',
+                borderRadius: 5, padding: '5px 8px', cursor: 'pointer', position: 'relative',
+                minHeight: 32,
+              }}
+            >
+              <div style={{ fontSize: 9, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 0.4, whiteSpace: 'nowrap', width: 62, flexShrink: 0 }}>
+                {gi === 0 ? <>{icon} {SLOT_LABEL[slot]}</> : <span style={{ opacity: 0.35 }}>{icon} {SLOT_LABEL[slot]}</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                  <span style={{ color: 'var(--color-accent)', fontWeight: 700, flexShrink: 0 }}>×{count}</span>
+                </div>
+                <div style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>⚡ {rateItem(item)}</div>
+              </div>
+              <button
+                onClick={e => { e.stopPropagation(); onToggleLock(item.inventoryId ?? item.id); }}
+                title={item.isLocked ? 'Unlock' : 'Lock'}
+                style={{ background: item.isLocked ? 'rgba(200,149,74,0.85)' : 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 3, padding: '1px 4px', cursor: 'pointer', fontSize: 9, lineHeight: 1.4, color: item.isLocked ? '#1a1713' : '#888', flexShrink: 0 }}
+              >{item.isLocked ? '🔒' : '🔓'}</button>
+            </div>
+          </BodyMapRow>
+        ));
+      })}
+
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // useImage hook
@@ -211,6 +396,212 @@ function ConfirmDialog({ message, onConfirm, onCancel }: ConfirmDialogProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Unequip modal — slot-filtered view + qty picker for consumables
+// ---------------------------------------------------------------------------
+interface UnequipModalProps {
+  eq: Equipment;
+  maiden: Maiden;
+  /** All instances of the same consumable stacked on this maiden (length > 1 only for consumables). */
+  stackCount: number;
+  onConfirm: (qty: number) => void;
+  onCancel: () => void;
+}
+function UnequipModal({ eq, maiden, stackCount, onConfirm, onCancel }: UnequipModalProps) {
+  const isConsumable = eq.slot === 'consumable';
+  const [qty, setQty] = useState(1);
+
+  return ReactDOM.createPortal(
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.78)',
+    }}>
+      <div style={{
+        background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+        borderRadius: 8, padding: 24, maxWidth: 360, width: '90%',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+      }}>
+        {/* Header */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-accent)', marginBottom: 4 }}>
+          Unequip: {eq.name}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: isConsumable ? 16 : 20 }}>
+          From <strong style={{ color: 'var(--color-text)' }}>{maiden.nickname ?? maiden.name}</strong>
+          {isConsumable && <> &nbsp;·&nbsp; <span style={{ color: '#c8a84b' }}>{stackCount} equipped</span></>}
+        </div>
+
+        {/* Consumable qty picker */}
+        {isConsumable && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 8 }}>How many to unequip?</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={() => setQty(q => Math.max(1, q - 1))}
+                disabled={qty <= 1}
+                style={{
+                  width: 28, height: 28, borderRadius: 4, border: '1px solid var(--color-border)',
+                  background: 'var(--color-bg-card)', color: 'var(--color-text)',
+                  cursor: qty <= 1 ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1,
+                  opacity: qty <= 1 ? 0.4 : 1,
+                }}
+              >−</button>
+              <div style={{
+                width: 44, textAlign: 'center', fontSize: 16, fontWeight: 700,
+                color: 'var(--color-text)',
+              }}>{qty}</div>
+              <button
+                onClick={() => setQty(q => Math.min(stackCount, q + 1))}
+                disabled={qty >= stackCount}
+                style={{
+                  width: 28, height: 28, borderRadius: 4, border: '1px solid var(--color-border)',
+                  background: 'var(--color-bg-card)', color: 'var(--color-text)',
+                  cursor: qty >= stackCount ? 'not-allowed' : 'pointer', fontSize: 16, lineHeight: 1,
+                  opacity: qty >= stackCount ? 0.4 : 1,
+                }}
+              >+</button>
+              <button
+                onClick={() => setQty(stackCount)}
+                disabled={qty === stackCount}
+                style={{
+                  marginLeft: 4, padding: '3px 10px', fontSize: 10, borderRadius: 4,
+                  border: '1px solid var(--color-border)', background: 'transparent',
+                  color: qty === stackCount ? 'var(--color-text-muted)' : 'var(--color-text)',
+                  cursor: qty === stackCount ? 'default' : 'pointer',
+                  opacity: qty === stackCount ? 0.5 : 1,
+                }}
+              >All</button>
+            </div>
+            {qty === stackCount && (
+              <div style={{ marginTop: 6, fontSize: 10, color: '#888' }}>All copies will be returned to stockpile.</div>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{
+            background: 'transparent', border: '1px solid var(--color-border)',
+            color: 'var(--color-text-muted)', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 13,
+          }}>Cancel</button>
+          <button onClick={() => onConfirm(qty)} style={{
+            background: 'var(--color-danger)', border: 'none', color: '#fff',
+            borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontSize: 13,
+          }}>
+            {isConsumable ? `Unequip ${qty}` : 'Unequip'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Equipment tooltip (portal)
+// ---------------------------------------------------------------------------
+interface TooltipState { eq: Equipment; ownerMaiden?: Maiden | null; x: number; y: number }
+
+function EquipTooltip({ eq, ownerMaiden, x, y }: TooltipState) {
+  const [rect, setRect] = useState<{ w: number; h: number } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (ref.current) setRect({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
+  }, []);
+
+  const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+  const vw = window.innerWidth / zoom;
+  const vh = window.innerHeight / zoom;
+  const GAP = 14;
+  let left = x + GAP;
+  let top = y;
+  if (rect) {
+    if (left + rect.w > vw - 8) left = x - rect.w - GAP;
+    if (top + rect.h > vh - 8) top = vh - rect.h - 8;
+    if (top < 8) top = 8;
+  }
+
+  const ownerLabel = ownerMaiden ? (ownerMaiden.nickname ?? ownerMaiden.name) : null;
+  const rv: number = (eq as any).rarityValue ?? (eq.isRare ? 3 : 1);
+  const RARITY_LABEL = ['', '⚪ Common', '🟢 Uncommon', '🔵 Rare', '🟣 Very Rare', '🔴 Legendary'];
+  const RARITY_COLOR = ['', 'var(--color-text-muted)', '#6db86d', '#4a9eff', '#a06fd8', '#e08080'];
+  const rarityLabel = RARITY_LABEL[rv] ?? RARITY_LABEL[1];
+  const rarityColor = RARITY_COLOR[rv] ?? RARITY_COLOR[1];
+
+  return ReactDOM.createPortal(
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed', left, top, zIndex: 99999,
+        background: 'var(--color-surface)',
+        border: `1px solid ${rv >= 3 ? rarityColor : 'var(--color-accent)'}`,
+        boxShadow: `0 6px 24px rgba(0,0,0,0.7)${rv >= 3 ? `, 0 0 12px ${rarityColor}44` : ''}`,
+        borderRadius: 8,
+        padding: '10px 13px',
+        minWidth: 190,
+        maxWidth: 260,
+        pointerEvents: 'none',
+        userSelect: 'none',
+      }}
+    >
+      {/* Name */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: rv >= 3 ? rarityColor : 'var(--color-text)', marginBottom: 6, lineHeight: 1.3 }}>
+        {eq.name}
+      </div>
+
+      {/* Meta row */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginBottom: 8 }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+          {(() => {
+            const icons: Record<string,string> = { weapon:'🔫', head:'🪖', mask:'🎭', body:'🧥', arms:'🧤', legs:'👢', accessory:'🔭', medal:'🎖️', consumable:'🧪' };
+            return `${icons[eq.slot] ?? ''} ${SLOT_LABEL[eq.slot] ?? eq.slot}`;
+          })()}
+        </span>
+        {eq.weight !== undefined && (
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>⚖️ {eq.weight} lb</span>
+        )}
+        <span style={{ fontSize: 10, color: rarityColor }}>{rarityLabel}</span>
+        <span style={{ fontSize: 10, color: '#7ab' }}>⚡ {rateItem(eq)}</span>
+      </div>
+
+      {/* Damage */}
+      {eq.damage !== undefined && (
+        <div style={{ fontSize: 11, color: '#e8a85a', marginBottom: 5 }}>
+          ⚔️ DMG {eq.damage}{eq.shotsPerRound !== undefined && eq.shotsPerRound > 1 ? ` × ${eq.shotsPerRound}/rnd` : ''}
+          {eq.hitRateBonus !== undefined && eq.hitRateBonus !== 0 ? <span style={{ marginLeft: 6, color: '#7ab' }}>Hit {eq.hitRateBonus > 0 ? '+' : ''}{eq.hitRateBonus}</span> : null}
+        </div>
+      )}
+
+      {/* Bonuses */}
+      {eq.bonuses.length > 0 && (
+        <div style={{ marginBottom: 6 }}>
+          {eq.bonuses.map((b, i) => (
+            <div key={i} style={{ fontSize: 11, color: b.value >= 0 ? '#6ab06a' : '#c06060', lineHeight: 1.5 }}>
+              {b.label}: {b.value > 0 ? '+' : ''}{b.value}{b.isPercent ? '%' : ''}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Description */}
+      {eq.description && (
+        <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontStyle: 'italic', marginBottom: ownerLabel ? 8 : 0, lineHeight: 1.45, borderTop: '1px solid var(--color-border)', paddingTop: 6 }}>
+          {eq.description}
+        </div>
+      )}
+
+      {/* Owner */}
+      {ownerLabel && (
+        <div style={{ fontSize: 10, color: '#e8a85a', marginTop: 6, borderTop: '1px solid var(--color-border)', paddingTop: 6 }}>
+          {ownerMaiden?.isCaptured ? '⛓️ Held by captive: ' : ownerMaiden?.isFallen ? '✝️ On body of: ' : '👤 Equipped by: '}
+          <strong>{ownerLabel}</strong>
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Equipment card
 // ---------------------------------------------------------------------------
 interface EquipCardProps {
@@ -226,22 +617,27 @@ interface EquipCardProps {
 }
 function EquipCard({ eq, ownerMaiden, equipped, draggable, dim, locked, stackCount, onDragStart, onDragEnd, onClick }: EquipCardProps & { locked?: boolean }) {
   const ownerSrc = ownerMaiden ? getMaidenIcon(ownerMaiden.imgId) : null;
+  const [tooltip, setTooltip] = useState<{ x: number; y: number } | null>(null);
+  function tipPos(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+    return { x: e.clientX / zoom, y: e.clientY / zoom };
+  }
   return (
     <div
       draggable={locked ? false : draggable}
       onDragStart={locked ? undefined : onDragStart}
-      onDragEnd={locked ? undefined : onDragEnd}
+      onDragEnd={() => { setTooltip(null); onDragEnd?.(); }}
       onClick={locked ? undefined : onClick}
-      title={locked
-        ? `${eq.name} — held by captured maiden ${ownerMaiden?.nickname ?? ownerMaiden?.name ?? ''}. Cannot be accessed while she is captive.`
-        : `${eq.name}${eq.weight !== undefined ? ` [${eq.weight} lb]` : ''} — ${eq.description}${ownerMaiden ? `\nEquipped by: ${ownerMaiden.nickname ?? ownerMaiden.name}` : ''}`}
+      onMouseEnter={e => setTooltip(tipPos(e))}
+      onMouseMove={e => setTooltip(tipPos(e))}
+      onMouseLeave={() => setTooltip(null)}
       style={{
         position: 'relative',
         width: 90,
         flexShrink: 0,
         background: locked ? '#0a0907' : equipped ? 'rgba(200,149,74,0.15)' : '#0e0d0b',
-        border: `1px solid ${locked ? '#3a2a2a' : eq.isRare ? '#c84a4a' : equipped ? 'var(--color-accent)' : 'var(--color-border)'}`,
-        boxShadow: (!locked && eq.isRare) ? '0 0 8px rgba(200,74,74,0.3)' : 'none',
+        border: `1px solid ${locked ? '#3a2a2a' : ((eq as any).rarityValue ?? (eq.isRare ? 3 : 1)) >= 3 ? RARITY_COLORS_CARD[(eq as any).rarityValue ?? 3] : equipped ? 'var(--color-accent)' : 'var(--color-border)'}`,
+        boxShadow: (!locked && ((eq as any).rarityValue ?? (eq.isRare ? 3 : 1)) >= 3) ? `0 0 8px ${RARITY_COLORS_CARD[(eq as any).rarityValue ?? 3]}66` : 'none',
         borderRadius: 6,
         padding: '8px 6px 6px',
         cursor: locked ? 'not-allowed' : 'pointer',
@@ -294,9 +690,25 @@ function EquipCard({ eq, ownerMaiden, equipped, draggable, dim, locked, stackCou
           ⚖️ {eq.weight} lb
         </div>
       )}
+      <div style={{ fontSize: 9, color: '#7ab', marginTop: 2 }}>⚡ {rateItem(eq)}</div>
+      {tooltip && <EquipTooltip eq={eq} ownerMaiden={ownerMaiden} x={tooltip.x} y={tooltip.y} />}
     </div>
   );
 }
+
+// ── Slot filter pill buttons ────────────────────────────────────────────────
+const SLOT_FILTER_BTNS: { value: string; label: string }[] = [
+  { value: 'all',        label: 'All' },
+  { value: 'weapon',     label: '🔫 Weapon' },
+  { value: 'head',       label: '🪖 Head' },
+  { value: 'mask',       label: '🎭 Mask' },
+  { value: 'body',       label: '🧥 Body' },
+  { value: 'arms',       label: '🧤 Arms' },
+  { value: 'legs',       label: '👢 Legs' },
+  { value: 'accessory',  label: '🔭 Accessory' },
+  { value: 'medal',      label: '🎖️ Medal' },
+  { value: 'consumable', label: '🧪 Consumable' },
+];
 
 // ---------------------------------------------------------------------------
 // Equipment panel (inside modal)
@@ -307,18 +719,24 @@ interface EquipPanelProps {
   inventory: Equipment[];
 }
 function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
-  const { equipItem, unequipItem, toggleItemLock } = useGameStore();
+  const { equipItem, unequipItem, toggleItemLock, reviveHeroine, inventory: stockpile } = useGameStore();
   const [confirm, setConfirm] = useState<{ message: string; onConfirm: () => void } | null>(null);
+  const [unequipModal, setUnequipModal] = useState<{ eq: Equipment; stackCount: number } | null>(null);
   const [dragEqId, setDragEqId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<'equipped' | 'available' | null>(null);
   const dragSourceRef = useRef<{ eq: Equipment; ownerMaiden: Maiden | null; fromEquipped: boolean } | null>(null);
   const [weightError, setWeightError] = useState<string | null>(null);
 
-  // Weight capacity
-  const carryMax = computeMaxCarryWeight(maiden.stats.strength);
+  // Weight capacity (effective STR includes bonuses from equipped items, same as gameStore)
+  const equippedStrBonus = maiden.equipment.reduce((s, e) =>
+    s + e.bonuses.filter(b => b.stat === 'strength').reduce((ss, b) => ss + b.value, 0), 0);
+  const carryMax = computeMaxCarryWeight(maiden.stats.strength + equippedStrBonus);
   const carryUsed = computeCarryWeight(maiden.equipment);
   const carryPct = Math.min(100, (carryUsed / carryMax) * 100);
   const carryColor = carryUsed > carryMax ? '#c84a4a' : carryPct >= 85 ? '#e8a85a' : '#6ab06a';
+
+  // ── UI state ─────────────────────────────────────────────────────────────────
+  const [showEquipped, setShowEquipped] = useState<boolean>(false);
 
   // ── Filter state ────────────────────────────────────────────────────────────
   const [filterSlot, setFilterSlot] = useState<string>('all');
@@ -334,12 +752,17 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
   ];
 
   function doEquip(eq: Equipment, ownerMaiden: Maiden | null) {
+    if ((eq as any).noEquip) {
+      setWeightError(`"${eq.name}" cannot be equipped — use it via its special interaction.`);
+      setTimeout(() => setWeightError(null), 4000);
+      return;
+    }
     const isWeapon = eq.slot === 'weapon';
     const displaced = isWeapon ? maiden.equipment.find(e => e.slot === 'weapon') : undefined;
     const removedWeight = displaced ? (displaced.weight ?? 0) : 0;
     const newCarry = carryUsed - removedWeight + (eq.weight ?? 0);
     if (newCarry > carryMax) {
-      setWeightError(`Cannot equip "${eq.name}" — carry weight would be ${newCarry} lb (max ${carryMax} lb for STR ${maiden.stats.strength})`);
+      setWeightError(`Cannot equip "${eq.name}" — carry weight would be ${Math.round(newCarry * 10) / 10} lb (max ${carryMax} lb for STR ${maiden.stats.strength})`);  
       setTimeout(() => setWeightError(null), 4000);
       return;
     }
@@ -348,7 +771,11 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
   }
 
   function doUnequip(eq: Equipment) {
-    unequipItem(maiden.id, eq);
+    // Count how many copies of this consumable are equipped (by template id)
+    const stackCount = eq.slot === 'consumable'
+      ? maiden.equipment.filter(e => e.id === eq.id).length
+      : 1;
+    setUnequipModal({ eq, stackCount });
   }
 
   function handleClickAvailable(eq: Equipment, ownerMaiden: Maiden | null) {
@@ -434,6 +861,20 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
     return (
       <div>
         {confirm && <ConfirmDialog message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
+        {unequipModal && (
+          <UnequipModal
+            eq={unequipModal.eq}
+            maiden={maiden}
+            stackCount={unequipModal.stackCount}
+            onConfirm={qty => {
+              const instances = maiden.equipment.filter(e => e.id === unequipModal.eq.id);
+              const toRemove = instances.slice(0, qty);
+              toRemove.forEach(e => unequipItem(maiden.id, e));
+              setUnequipModal(null);
+            }}
+            onCancel={() => setUnequipModal(null)}
+          />
+        )}
 
         {/* Equipped — still unequippable from KIA body */}
         <div style={{ marginBottom: 16 }}>
@@ -482,6 +923,36 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
             This maiden has fallen in battle. Items from the stockpile cannot be assigned to her.
             Items on her body can be retrieved above, or taken by other maidens via their equipment panels.
           </div>
+          {/* Revenant Bloom revival — only for heroines */}
+          {maiden.type === 'heroine' && (() => {
+            const bloomCount = stockpile.filter(i => i.id === 'revenant_bloom').reduce((s, i) => s + (i.quantity ?? 1), 0);
+            const canRevive = bloomCount >= 7;
+            return (
+              <div style={{ marginTop: 4, borderTop: '1px solid rgba(120,120,120,0.3)', paddingTop: 12, width: '100%' }}>
+                <div style={{ fontSize: 11, color: canRevive ? '#c8a84b' : '#666', marginBottom: 8 }}>
+                  🌸 <strong>Revenant Bloom</strong> in stockpile: <strong style={{ color: canRevive ? '#e8c86b' : '#888' }}>{bloomCount}</strong> / 7
+                </div>
+                <button
+                  disabled={!canRevive}
+                  onClick={() => { if (canRevive) reviveHeroine(maiden.id); }}
+                  style={{
+                    background: canRevive ? 'rgba(180,130,60,0.25)' : 'rgba(80,80,80,0.2)',
+                    border: `1px solid ${canRevive ? 'rgba(200,168,75,0.7)' : 'rgba(100,100,100,0.4)'}`,
+                    color: canRevive ? '#e8c86b' : '#666',
+                    borderRadius: 5, padding: '7px 18px', cursor: canRevive ? 'pointer' : 'not-allowed',
+                    fontSize: 12, fontWeight: 'bold',
+                  }}
+                >
+                  Revive with 7 Revenant Blooms
+                </button>
+                {!canRevive && (
+                  <div style={{ fontSize: 10, color: '#555', marginTop: 5 }}>
+                    {7 - bloomCount} more needed — found in consumable missions
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
     );
@@ -490,119 +961,158 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
   return (
     <div>
       {confirm && <ConfirmDialog message={confirm.message} onConfirm={confirm.onConfirm} onCancel={() => setConfirm(null)} />}
+      {unequipModal && (
+        <UnequipModal
+          eq={unequipModal.eq}
+          maiden={maiden}
+          stackCount={unequipModal.stackCount}
+          onConfirm={qty => {
+            // For consumables unequip qty copies by inventoryId order; for non-consumables always 1
+            const instances = maiden.equipment.filter(e => e.id === unequipModal.eq.id);
+            const toRemove = instances.slice(0, qty);
+            toRemove.forEach(e => unequipItem(maiden.id, e));
+            setUnequipModal(null);
+          }}
+          onCancel={() => setUnequipModal(null)}
+        />
+      )}
 
-      {/* Carry weight bar */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>⚖️ Carry Weight</span>
-          <span style={{ fontSize: 11, color: carryColor, fontWeight: 'bold' }}>{carryUsed} / {carryMax} lb</span>
-        </div>
-        <div style={{ height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${carryPct}%`, background: carryColor, borderRadius: 3, transition: 'width 0.3s, background 0.3s' }} />
-        </div>
-        {weightError && (
-          <div style={{ marginTop: 6, padding: '5px 8px', background: 'rgba(200,74,74,0.12)', border: '1px solid rgba(200,74,74,0.4)', borderRadius: 4, fontSize: 11, color: '#e08080' }}>
-            ⚠️ {weightError}
-          </div>
-        )}
-      </div>
+      {/* Side-by-side layout: left = equipped overview, right = available stockpile */}
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
 
-      {/* Equipped */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 6 }}>
-          Equipped ({maiden.equipment.length}) — click or drag to unequip
-        </div>
-        <div
-          style={dropZone('equipped')}
-          onDragOver={e => { e.preventDefault(); setDragOver('equipped'); }}
-          onDragLeave={() => setDragOver(null)}
-          onDrop={handleDropOnEquipped}
-        >
-          {maiden.equipment.length === 0 ? (
-            <span style={{ color: 'var(--color-text-muted)', fontSize: 12, alignSelf: 'center', padding: '4px 8px' }}>
-              Nothing equipped — drag or click items below
-            </span>
-          ) : maiden.equipment.map(eq => (
-            <div key={eq.id} style={{ position: 'relative', display: 'inline-block' }}>
-              <EquipCard
-                eq={eq}
-                equipped
-                draggable
-                dim={dragEqId === eq.id}
-                onDragStart={e => {
-                  dragSourceRef.current = { eq, ownerMaiden: null, fromEquipped: true };
-                  setDragEqId(eq.id);
-                  e.dataTransfer.effectAllowed = 'move';
-                }}
-                onDragEnd={() => { setDragEqId(null); setDragOver(null); dragSourceRef.current = null; }}
-                onClick={() => doUnequip(eq)}
-              />
-              <button
-                onClick={e => { e.stopPropagation(); toggleItemLock(eq.inventoryId ?? eq.id); }}
-                title={eq.isLocked ? 'Unlock (allow selling)' : 'Lock (prevent selling)'}
-                style={{ position: 'absolute', top: 3, right: 3, background: eq.isLocked ? 'rgba(200,149,74,0.85)' : 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 3, padding: '1px 4px', cursor: 'pointer', fontSize: 10, lineHeight: 1.4, color: eq.isLocked ? '#1a1713' : '#888', zIndex: 2 }}
-              >{eq.isLocked ? '🔒' : '🔓'}</button>
+        {/* ── LEFT: Equipped overview ── */}
+        <div style={{ flex: '0 0 auto', width: 220, minWidth: 200 }}>
+
+          {/* Carry weight bar */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+              <span style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>⚖️ Carry</span>
+              <span style={{ fontSize: 10, color: carryColor, fontWeight: 'bold' }}>{Math.round(carryUsed * 10) / 10} / {carryMax} lb</span>
             </div>
-          ))}
-        </div>
-      </div>
+            <div style={{ height: 5, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${carryPct}%`, background: carryColor, borderRadius: 3, transition: 'width 0.3s, background 0.3s' }} />
+            </div>
+            {weightError && (
+              <div style={{ marginTop: 5, padding: '4px 7px', background: 'rgba(200,74,74,0.12)', border: '1px solid rgba(200,74,74,0.4)', borderRadius: 4, fontSize: 10, color: '#e08080' }}>
+                ⚠️ {weightError}
+              </div>
+            )}
+          </div>
 
-      {/* Available */}
-      <div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 8 }}>
-          Available
-          <span style={{ fontWeight: 'normal', marginLeft: 8, textTransform: 'none', letterSpacing: 0, fontSize: 10 }}>
-            — portrait badge = equipped by another maiden &nbsp;|&nbsp; 1 weapon max per maiden
-          </span>
-        </div>
-
-        {/* Filter bar */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-          <select
-            value={filterSlot}
-            onChange={e => setFilterSlot(e.target.value)}
-            style={{
-              background: 'var(--color-bg-card)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
-              borderRadius: 4, padding: '3px 6px', fontSize: 11, cursor: 'pointer',
-            }}
-          >
-            <option value="all">All types</option>
-            <option value="weapon">🔫 Weapon</option>
-            <option value="head">🪖 Head</option>
-            <option value="body">🧥 Body</option>
-            <option value="legs">👢 Legs</option>
-            <option value="accessory">🔭 Accessory</option>
-            <option value="medal">🎖️ Medal</option>
-            <option value="consumable">🧪 Consumable</option>
-          </select>
-          <input
-            type="text"
-            placeholder="Search name…"
-            value={filterName}
-            onChange={e => setFilterName(e.target.value)}
-            style={{
-              background: 'var(--color-bg-card)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
-              borderRadius: 4, padding: '3px 8px', fontSize: 11, flex: '1 1 120px', minWidth: 100,
-            }}
+          {/* Body-map — click equipped to unequip (with confirm), click empty to filter */}
+          <BodyMap
+            equipped={maiden.equipment}
+            onUnequip={eq => { doUnequip(eq); setFilterSlot(eq.slot); }}
+            onToggleLock={id => toggleItemLock(id)}
+            onSelectEmptySlot={slot => setFilterSlot(slot)}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none' }}>
-            <input
-              type="checkbox"
-              checked={hideEquipped}
-              onChange={e => setHideEquipped(e.target.checked)}
-              style={{ cursor: 'pointer' }}
-            />
-            Hide equipped
-          </label>
-          {(filterSlot !== 'all' || filterName || hideEquipped) && (
-            <button
-              onClick={() => { setFilterSlot('all'); setFilterName(''); setHideEquipped(false); }}
-              style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 4, padding: '2px 8px', fontSize: 10, color: 'var(--color-text-muted)', cursor: 'pointer' }}
+
+          {/* Collapsible flat equipped grid (for drag-drop) */}
+          <div style={{ marginBottom: 8 }}>
+            <div
+              onClick={() => setShowEquipped(v => !v)}
+              style={{ fontSize: 10, color: 'var(--color-text-muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4, cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
             >
-              Clear
-            </button>
-          )}
+              <span style={{ fontSize: 8 }}>{showEquipped ? '▼' : '▶'}</span>
+              All equipped ({maiden.equipment.length})
+            </div>
+            {showEquipped && (
+              <div
+                style={dropZone('equipped')}
+                onDragOver={e => { e.preventDefault(); setDragOver('equipped'); }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={handleDropOnEquipped}
+              >
+                {maiden.equipment.length === 0 ? (
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: 11, alignSelf: 'center', padding: '4px 8px' }}>Nothing equipped</span>
+                ) : (() => {
+                  // Group by name for stacking display
+                  type GEntry = { eq: Equipment; count: number };
+                  const gmap = new Map<string, GEntry>();
+                  for (const eq of maiden.equipment) {
+                    const k = eq.name + '|' + eq.slot;
+                    const ex = gmap.get(k);
+                    if (ex) ex.count += 1; else gmap.set(k, { eq, count: 1 });
+                  }
+                  return [...gmap.values()].map(({ eq, count }) => (
+                    <div key={eq.id} style={{ position: 'relative', display: 'inline-block' }}>
+                      <EquipCard
+                        eq={eq}
+                        equipped
+                        draggable
+                        stackCount={count > 1 ? count : undefined}
+                        dim={dragEqId === eq.id}
+                        onDragStart={e => {
+                          dragSourceRef.current = { eq, ownerMaiden: null, fromEquipped: true };
+                          setDragEqId(eq.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => { setDragEqId(null); setDragOver(null); dragSourceRef.current = null; }}
+                        onClick={() => doUnequip(eq)}
+                      />
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleItemLock(eq.inventoryId ?? eq.id); }}
+                        title={eq.isLocked ? 'Unlock (allow selling)' : 'Lock (prevent selling)'}
+                        style={{ position: 'absolute', top: 3, right: 3, background: eq.isLocked ? 'rgba(200,149,74,0.85)' : 'rgba(0,0,0,0.55)', border: 'none', borderRadius: 3, padding: '1px 4px', cursor: 'pointer', fontSize: 10, lineHeight: 1.4, color: eq.isLocked ? '#1a1713' : '#888', zIndex: 2 }}
+                      >{eq.isLocked ? '🔒' : '🔓'}</button>
+                    </div>
+                  ));
+                })()}
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* ── RIGHT: Available stockpile ── */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>
+            Available stockpile
+            <span style={{ fontWeight: 'normal', marginLeft: 6, textTransform: 'none', letterSpacing: 0, fontSize: 9 }}>
+              — portrait = on another maiden &nbsp;|&nbsp; 1 weapon max
+            </span>
+          </div>
+
+          {/* Filter bar — pill buttons */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+            {SLOT_FILTER_BTNS.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setFilterSlot(value)}
+                style={{
+                  padding: '3px 9px', fontSize: 11, borderRadius: 4,
+                  border: '1px solid var(--color-border)',
+                  background: filterSlot === value ? 'var(--color-accent)' : 'var(--color-surface)',
+                  color: filterSlot === value ? '#000' : 'var(--color-text)',
+                  cursor: 'pointer', fontWeight: filterSlot === value ? 700 : 400,
+                  whiteSpace: 'nowrap',
+                }}
+              >{label}</button>
+            ))}
+          </div>
+
+          {/* Secondary filter row: name search + hide equipped */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+            <input
+              type="text"
+              placeholder="Search name…"
+              value={filterName}
+              onChange={e => setFilterName(e.target.value)}
+              style={{
+                background: 'var(--color-bg-card)', color: 'var(--color-text)', border: '1px solid var(--color-border)',
+                borderRadius: 4, padding: '3px 8px', fontSize: 11, flex: '1 1 120px', minWidth: 80,
+              }}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+              <input type="checkbox" checked={hideEquipped} onChange={e => setHideEquipped(e.target.checked)} style={{ cursor: 'pointer' }} />
+              Hide equipped
+            </label>
+            {(filterSlot !== 'all' || filterName || hideEquipped) && (
+              <button
+                onClick={() => { setFilterSlot('all'); setFilterName(''); setHideEquipped(false); }}
+                style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: 4, padding: '2px 8px', fontSize: 10, color: 'var(--color-text-muted)', cursor: 'pointer' }}
+              >Clear</button>
+            )}
+          </div>
 
         {/* Filtered pool */}
         {(() => {
@@ -644,7 +1154,7 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
                   const isLockedByCaptive = !!ownerMaiden?.isCaptured;
                   const isItemLocked = !ownerMaiden && !!eq.isLocked;
                   return (
-                    <div key={`${eq.id}_${ownerMaiden?.id ?? 'inv'}`} style={{ position: 'relative', display: 'inline-block' }}>
+                    <div key={eq.inventoryId ?? `${eq.id}_${ownerMaiden?.id ?? 'inv'}`} style={{ position: 'relative', display: 'inline-block' }}>
                       <EquipCard
                         eq={eq}
                         ownerMaiden={ownerMaiden}
@@ -673,7 +1183,8 @@ function EquipmentPanel({ maiden, allMaidens, inventory }: EquipPanelProps) {
             </div>
           );
         })()}
-      </div>
+        </div>{/* end right column */}
+      </div>{/* end flex container */}
     </div>
   );
 }
@@ -773,14 +1284,29 @@ function InfoTab({ maiden, nickname, onNicknameChange, onSaveNickname, onToggleF
           {(Object.entries(maiden.stats) as [string, number][]).map(([k, v]) => (
             <BonusStatRow key={k} maiden={maiden} statKey={k} base={v} />
           ))}
-          <BonusStatRow
-            key="maxHp"
-            maiden={maiden}
-            statKey="hp"
-            label="Max HP"
-            base={7 + 2 * maiden.stats.constitution}
-            baseFormula={`7 + 2 × CON (${maiden.stats.constitution}) = ${7 + 2 * maiden.stats.constitution}`}
-          />
+          {(() => {
+            // Effective CON = raw + flat CON bonuses from all sources (same as computeFullMaxHp)
+            const conBonus = [
+              ...maiden.equipment.flatMap(e => e.bonuses),
+              ...maiden.qualifications.flatMap(q => q.bonuses),
+              ...maiden.tags.flatMap(t => TAG_DEFS[t.id]?.bonuses ?? []),
+            ].filter(b => b.stat === 'constitution' && !b.isPercent).reduce((s, b) => s + b.value, 0);
+            const effCon = maiden.stats.constitution + conBonus;
+            const hpBase = 7 + 2 * effCon;
+            const formula = conBonus !== 0
+              ? `7 + 2 × (CON ${maiden.stats.constitution} + ${conBonus}) = ${hpBase}`
+              : `7 + 2 × CON (${maiden.stats.constitution}) = ${hpBase}`;
+            return (
+              <BonusStatRow
+                key="maxHp"
+                maiden={maiden}
+                statKey="hp"
+                label="Max HP"
+                base={hpBase}
+                baseFormula={formula}
+              />
+            );
+          })()}
           <StatRow label="Current HP" value={maiden.currentHp} danger={maiden.currentHp < maiden.maxHp * 0.4} />
           <StatRow label="Kills" value={maiden.killCount} />
           <StatRow label="Missions" value={maiden.missionCount} />
@@ -992,7 +1518,7 @@ function MaidenModal({ maiden, allMaidens, inventory, onClose, onSaveNickname, o
               onToggleFavourite={() => onToggleFavourite(maiden.id)}
             />
           ) : tab === 'equip' ? (
-            <EquipmentPanel maiden={maiden} allMaidens={allMaidens} inventory={inventory} />
+            <EquipmentPanel key={`${maiden.id}-${String(maiden.isFallen)}`} maiden={maiden} allMaidens={allMaidens} inventory={inventory} />
           ) : (
             <ExpTab maiden={maiden} />
           )}
@@ -1221,6 +1747,20 @@ export default function Members() {
     () => localStorage.getItem('members_heroineOnly') === 'true'
   );
 
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(800);
+  useEffect(() => {
+    const el = gridContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerWidth(w);
+    });
+    ro.observe(el);
+    setContainerWidth(el.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
+
   function setViewModePersist(v: 'grid' | 'list') { localStorage.setItem('members_viewMode', v); setViewMode(v); }
   function setShowAlivePersist(v: boolean) { localStorage.setItem('members_showAlive', String(v)); setShowAlive(v); }
   function setShowCapturedPersist(v: boolean) { localStorage.setItem('members_showCaptured', String(v)); setShowCaptured(v); }
@@ -1242,10 +1782,11 @@ export default function Members() {
     ...(showDead     ? fallenMaidens.filter(m => !heroineOnly || m.type === 'heroine')   : []),
   ];
 
-  const stageW = COLS * (CARD_W + GRID_GAP) + GRID_GAP;
-  const rows = Math.ceil((gridLiving.length + gridCaptured.length) / COLS);
+  const dynCols = Math.max(1, Math.floor((containerWidth - GRID_GAP) / (CARD_W + GRID_GAP)));
+  const stageW = containerWidth;
+  const rows = Math.ceil((gridLiving.length + gridCaptured.length) / dynCols);
   const stageH = rows * (CARD_H + GRID_GAP) + GRID_GAP;
-  const graveRows = Math.ceil(gridFallen.length / COLS);
+  const graveRows = Math.ceil(gridFallen.length / dynCols);
   const graveH = graveRows * (CARD_H + GRID_GAP) + GRID_GAP;
 
   function saveNickname(id: string, nick: string) {
@@ -1330,12 +1871,12 @@ export default function Members() {
 
       {viewMode === 'grid' ? (
         <>
-          <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
-            <Stage width={stageW} height={Math.max(stageH, 160)}>
+          <div ref={gridContainerRef} style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+            <Stage width={stageW} height={Math.max(stageH, 160)} pixelRatio={(window.devicePixelRatio || 1) * (parseFloat(document.documentElement.style.zoom) || 1)}>
               <Layer>
                 {[...gridLiving, ...gridCaptured].map((m, idx) => {
-                  const col = idx % COLS;
-                  const row = Math.floor(idx / COLS);
+                  const col = idx % dynCols;
+                  const row = Math.floor(idx / dynCols);
                   return (
                     <MaidenCard
                       key={m.id} maiden={m}
@@ -1380,11 +1921,11 @@ export default function Members() {
                 </button>
               </div>
               <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden', padding: 16 }}>
-                <Stage width={stageW} height={Math.max(graveH, 100)}>
+                <Stage width={stageW} height={Math.max(graveH, 100)} pixelRatio={(window.devicePixelRatio || 1) * (parseFloat(document.documentElement.style.zoom) || 1)}>
                   <Layer>
                     {gridFallen.map((m, idx) => {
-                      const col = idx % COLS;
-                      const row = Math.floor(idx / COLS);
+                      const col = idx % dynCols;
+                      const row = Math.floor(idx / dynCols);
                       return (
                         <FallenMaidenCard
                           key={m.id} maiden={m}
@@ -1454,9 +1995,10 @@ function MoraleDisplay({ maiden }: { maiden: Maiden }) {
   const moraleColor = morale >= 70 ? '#4a8c4a' : morale >= 30 ? '#c8a84b' : '#b84040';
 
   function handleMouseEnter(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const x = Math.min(rect.left, window.innerWidth - 230);
-    setTipPos({ x, y: rect.bottom + 8 });
+    const x = Math.min(rect.left / zoom, window.innerWidth / zoom - 230);
+    setTipPos({ x, y: rect.bottom / zoom + 8 });
     setTipVisible(true);
   }
 
@@ -1562,15 +2104,19 @@ function BonusStatRow({ maiden, statKey, base, label: labelOverride, baseFormula
   const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const breakdowns = collectStatBonuses(maiden, statKey);
-  const totalBonus = breakdowns.reduce((s, b) => s + b.value, 0);
+  const flatSum = breakdowns.filter(b => !b.isPercent).reduce((s, b) => s + b.value, 0);
+  const pctSum  = breakdowns.filter(b =>  b.isPercent).reduce((s, b) => s + b.value, 0);
+  // Final value: (base + flat) × (1 + pct/100), rounded
+  const computedTotal = Math.round((base + flatSum) * (1 + pctSum / 100));
   const displayLabel = labelOverride ?? statKey;
+  const hasPct = pctSum !== 0;
 
   function handleMouseEnter(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    // Try to place tooltip to the right; fall back left if near edge
-    const rightEdge = rect.right + 8;
-    const x = rightEdge + 220 > window.innerWidth ? rect.left - 228 : rightEdge;
-    setPos({ x, y: rect.top });
+    const rightEdge = rect.right / zoom + 8;
+    const x = rightEdge + 220 > window.innerWidth / zoom ? rect.left / zoom - 228 : rightEdge;
+    setPos({ x, y: rect.top / zoom });
     setVisible(true);
   }
 
@@ -1588,11 +2134,16 @@ function BonusStatRow({ maiden, statKey, base, label: labelOverride, baseFormula
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)', textTransform: 'capitalize' }}>{displayLabel}</span>
         <span style={{ fontSize: 12, fontWeight: 'bold', display: 'flex', gap: 4, alignItems: 'center' }}>
           <span style={{ color: 'var(--color-text)' }}>{base}</span>
-          {totalBonus !== 0 && (
-            <span style={{ color: totalBonus > 0 ? '#6db86d' : '#cc6060', fontSize: 11, fontWeight: 'bold' }}>
-              {totalBonus > 0 ? '+' : ''}{totalBonus}
+          {hasPct ? (
+            // Show final value when a percent multiplier is involved
+            <span style={{ color: '#6db86d', fontSize: 11, fontWeight: 'bold' }}>
+              → {computedTotal}
             </span>
-          )}
+          ) : flatSum !== 0 ? (
+            <span style={{ color: flatSum > 0 ? '#6db86d' : '#cc6060', fontSize: 11, fontWeight: 'bold' }}>
+              {flatSum > 0 ? '+' : ''}{flatSum}
+            </span>
+          ) : null}
         </span>
       </div>
       {visible && breakdowns.length > 0 && (
@@ -1624,8 +2175,11 @@ function BonusStatRow({ maiden, statKey, base, label: labelOverride, baseFormula
           ))}
           <div style={{ borderTop: '1px solid #333', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: 'var(--color-text-muted)' }}>Total</span>
-            <span style={{ color: totalBonus > 0 ? '#6db86d' : totalBonus < 0 ? '#cc6060' : 'var(--color-text)', fontWeight: 'bold' }}>
-              {base + totalBonus} {totalBonus !== 0 && <span style={{ fontSize: 10, opacity: 0.7 }}>({base}{totalBonus > 0 ? '+' : ''}{totalBonus})</span>}
+            <span style={{ color: computedTotal > base ? '#6db86d' : computedTotal < base ? '#cc6060' : 'var(--color-text)', fontWeight: 'bold' }}>
+              {computedTotal}
+              {hasPct && flatSum === 0 && <span style={{ fontSize: 10, opacity: 0.7 }}> ({base} × {(1 + pctSum / 100).toFixed(2)})</span>}
+              {hasPct && flatSum !== 0 && <span style={{ fontSize: 10, opacity: 0.7 }}> ({base}{flatSum > 0 ? '+' : ''}{flatSum}) × {(1 + pctSum / 100).toFixed(2)}</span>}
+              {!hasPct && (flatSum !== 0) && <span style={{ fontSize: 10, opacity: 0.7 }}> ({base}{flatSum > 0 ? '+' : ''}{flatSum})</span>}
             </span>
           </div>
         </div>

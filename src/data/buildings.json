@@ -9,9 +9,9 @@
     "isConstructed": true,
     "prerequisites": [],
     "levels": [
-      { "level": 1, "costMoney": 0, "costWood": 0, "costMetal": 0, "description": "Starter tent row. Capacity: 20 maidens.", "effectKey": "beds", "effectValue": { "beds": 20 } },
-      { "level": 2, "costMoney": 200, "costWood": 50, "costMetal": 0, "description": "Extended tent block. Capacity: 40 maidens.", "effectKey": "beds", "effectValue": { "beds": 40 } },
-      { "level": 3, "costMoney": 500, "costWood": 120, "costMetal": 0, "description": "Full tent compound. Capacity: 60 maidens.", "effectKey": "beds", "effectValue": { "beds": 60 } }
+      { "level": 1, "costMoney": 0, "costWood": 0, "costMetal": 0, "description": "Starter tent row. Capacity: 30 maidens.", "effectKey": "beds", "effectValue": { "beds": 30 } },
+      { "level": 2, "costMoney": 200, "costWood": 50, "costMetal": 0, "description": "Extended tent block. Capacity: 50 maidens.", "effectKey": "beds", "effectValue": { "beds": 50 } },
+      { "level": 3, "costMoney": 500, "costWood": 120, "costMetal": 0, "description": "Full tent compound. Capacity: 70 maidens.", "effectKey": "beds", "effectValue": { "beds": 70 } }
     ]
   },
   {
@@ -35,13 +35,15 @@
     "category": "production",
     "description": "Produces weapons and gear from raw metal and wood.",
     "currentLevel": 1,
-    "maxLevel": 3,
+    "maxLevel": 5,
     "isConstructed": true,
     "prerequisites": [],
     "levels": [
       { "level": 1, "costMoney": 0, "costWood": 0, "costMetal": 0, "description": "Basic workshop. Can craft common equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 1 } },
       { "level": 2, "costMoney": 600, "costWood": 100, "costMetal": 80, "description": "Expanded factory. Can craft uncommon equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 2 } },
-      { "level": 3, "costMoney": 1500, "costWood": 200, "costMetal": 200, "description": "Full manufacturing plant. Can craft rare equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 3 } }
+      { "level": 3, "costMoney": 1500, "costWood": 200, "costMetal": 200, "description": "Full manufacturing plant. Can craft rare equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 3 } },
+      { "level": 4, "costMoney": 3000, "costWood": 350, "costMetal": 350, "description": "Advanced production facility. Can craft advanced-tier equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 4 } },
+      { "level": 5, "costMoney": 5500, "costWood": 500, "costMetal": 600, "description": "State-of-the-art weapons plant. Can craft elite-tier equipment.", "effectKey": "factory_tier", "effectValue": { "tier": 5 } }
     ]
   },
   {
@@ -54,16 +56,16 @@
     "isConstructed": true,
     "prerequisites": ["factory"],
     "levels": [
-      { "level": 1,  "costMoney": 0,    "costWood": 0,   "costMetal": 0,    "description": "Basic radio room. HQ shop Tier 1 — standard field gear.",                     "effectKey": "hq_contact", "effectValue": { "tier": 1  } },
-      { "level": 2,  "costMoney": 600,  "costWood": 50,  "costMetal": 80,   "description": "Improved signal. HQ shop Tier 2 — improved standard issue.",               "effectKey": "hq_contact", "effectValue": { "tier": 2  } },
-      { "level": 3,  "costMoney": 900,  "costWood": 80,  "costMetal": 120,  "description": "Enhanced comms. HQ shop Tier 3 — professional grade equipment.",           "effectKey": "hq_contact", "effectValue": { "tier": 3  } },
-      { "level": 4,  "costMoney": 1200, "costWood": 120, "costMetal": 160,  "description": "Secure channel. HQ shop Tier 4 — mid-tier specialist gear.",               "effectKey": "hq_contact", "effectValue": { "tier": 4  } },
-      { "level": 5,  "costMoney": 1600, "costWood": 160, "costMetal": 220,  "description": "Dedicated HQ liaison. HQ shop Tier 5 — heavy field equipment.",           "effectKey": "hq_contact", "effectValue": { "tier": 5  } },
-      { "level": 6,  "costMoney": 2200, "costWood": 220, "costMetal": 300,  "description": "Priority supply line. HQ shop Tier 6 — elite assault gear.",              "effectKey": "hq_contact", "effectValue": { "tier": 6  } },
-      { "level": 7,  "costMoney": 3000, "costWood": 300, "costMetal": 420,  "description": "Classified channel. HQ shop Tier 7 — advanced tactical equipment.",        "effectKey": "hq_contact", "effectValue": { "tier": 7  } },
-      { "level": 8,  "costMoney": 4000, "costWood": 400, "costMetal": 560,  "description": "Strategic command link. HQ shop Tier 8 — rare HQ supply.",                "effectKey": "hq_contact", "effectValue": { "tier": 8  } },
-      { "level": 9,  "costMoney": 5500, "costWood": 560, "costMetal": 750,  "description": "Command relay station. HQ shop Tier 9 — legendary gear.",                 "effectKey": "hq_contact", "effectValue": { "tier": 9  } },
-      { "level": 10, "costMoney": 8000, "costWood": 800, "costMetal": 1000, "description": "Supreme HQ channel. HQ shop Tier 10 — epic, game-changing equipment.",    "effectKey": "hq_contact", "effectValue": { "tier": 10 } }
+      { "level": 1,  "costMoney": 0,    "costWood": 0,   "costMetal": 0,    "description": "Basic radio room. HQ shop Tier 1 — standard field gear. Shop: 1 weapon + 2 items.",                     "effectKey": "hq_contact", "effectValue": { "tier": 1  } },
+      { "level": 2,  "costMoney": 600,  "costWood": 50,  "costMetal": 80,   "description": "Improved signal. HQ shop Tier 2 — improved standard issue. Shop: 1 weapon + 2 items.",               "effectKey": "hq_contact", "effectValue": { "tier": 2  } },
+      { "level": 3,  "costMoney": 900,  "costWood": 80,  "costMetal": 120,  "description": "Enhanced comms. HQ shop Tier 3 — professional grade equipment. Shop: 1 weapon + 2 items.",           "effectKey": "hq_contact", "effectValue": { "tier": 3  } },
+      { "level": 4,  "costMoney": 1200, "costWood": 120, "costMetal": 160,  "description": "Secure channel. HQ shop Tier 4 — mid-tier specialist gear. Shop: 2 weapons + 3 items.",               "effectKey": "hq_contact", "effectValue": { "tier": 4  } },
+      { "level": 5,  "costMoney": 1600, "costWood": 160, "costMetal": 220,  "description": "Dedicated HQ liaison. HQ shop Tier 5 — heavy field equipment. Shop: 2 weapons + 3 items.",           "effectKey": "hq_contact", "effectValue": { "tier": 5  } },
+      { "level": 6,  "costMoney": 2200, "costWood": 220, "costMetal": 300,  "description": "Priority supply line. HQ shop Tier 6 — elite assault gear. Shop: 3 weapons + 4 items.",              "effectKey": "hq_contact", "effectValue": { "tier": 6  } },
+      { "level": 7,  "costMoney": 3000, "costWood": 300, "costMetal": 420,  "description": "Classified channel. HQ shop Tier 7 — advanced tactical equipment. Shop: 3 weapons + 4 items.",        "effectKey": "hq_contact", "effectValue": { "tier": 7  } },
+      { "level": 8,  "costMoney": 4000, "costWood": 400, "costMetal": 560,  "description": "Strategic command link. HQ shop Tier 8 — rare HQ supply. Shop: 4 weapons + 5 items.",                "effectKey": "hq_contact", "effectValue": { "tier": 8  } },
+      { "level": 9,  "costMoney": 5500, "costWood": 560, "costMetal": 750,  "description": "Command relay station. HQ shop Tier 9 — legendary gear. Shop: 4 weapons + 5 items.",                 "effectKey": "hq_contact", "effectValue": { "tier": 9  } },
+      { "level": 10, "costMoney": 8000, "costWood": 800, "costMetal": 1000, "description": "Supreme HQ channel. HQ shop Tier 10 — epic, game-changing equipment. Shop: 4 weapons + 5 items.",    "effectKey": "hq_contact", "effectValue": { "tier": 10 } }
     ]
   },
   {
@@ -87,14 +89,16 @@
     "category": "supply",
     "description": "Fields and livestock that keep your maidens fed. Produces food after every concluded mission, regardless of outcome.",
     "currentLevel": 1,
-    "maxLevel": 4,
+    "maxLevel": 6,
     "isConstructed": true,
     "prerequisites": [],
     "levels": [
-      { "level": 1, "costMoney": 0, "costWood": 0, "costMetal": 0, "description": "Starter plot. Produces 150 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 150 } },
-      { "level": 2, "costMoney": 300, "costWood": 100, "costMetal": 0, "description": "Expanded fields. Produces 200 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 200 } },
-      { "level": 3, "costMoney": 700, "costWood": 200, "costMetal": 0, "description": "Large farm. Produces 300 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 300 } },
-      { "level": 4, "costMoney": 1500, "costWood": 400, "costMetal": 50, "description": "Industrial farm. Produces 400 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 400 } }
+      { "level": 1, "costMoney": 0, "costWood": 0, "costMetal": 0, "description": "Starter plot. Produces 200 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 200 } },
+      { "level": 2, "costMoney": 300, "costWood": 100, "costMetal": 0, "description": "Expanded fields. Produces 300 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 300 } },
+      { "level": 3, "costMoney": 700, "costWood": 200, "costMetal": 0, "description": "Large farm. Produces 400 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 400 } },
+      { "level": 4, "costMoney": 1500, "costWood": 400, "costMetal": 50, "description": "Industrial farm. Produces 500 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 500 } },
+      { "level": 5, "costMoney": 2800, "costWood": 600, "costMetal": 100, "description": "High-output cultivation complex. Produces 600 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 600 } },
+      { "level": 6, "costMoney": 5000, "costWood": 900, "costMetal": 200, "description": "Grand agri-fortress. Produces 700 food after each mission.", "effectKey": "food_production", "effectValue": { "food": 700 } }
     ]
   },
   {
@@ -107,7 +111,55 @@
     "isConstructed": true,
     "prerequisites": ["radio_center"],
     "levels": [
-      { "level": 1, "costMoney": 800, "costWood": 100, "costMetal": 60, "description": "Formal HQ review post. Base support scales with a difficulty-weighted win score across your last 10 missions (Easy ×0.6 / Normal ×1.0 / Hard ×1.5 / Extreme ×2.2 — wins only). Final payout is further modified by kill count and force strength. Clean missions (≤10% losses) earn a stacking bonus; high-casualty missions apply stacking exponential penalties.", "effectKey": "meridian", "effectValue": { "tier": 1 } }
+      { "level": 1, "costMoney": 800, "costWood": 100, "costMetal": 60, "description": "Formal HQ review post. Base support scales with a difficulty-weighted win score across your last 10 missions (Easy ×1 / Normal ×2 / Hard ×10 / Extreme ×40 — wins only). Final payout is further modified by kill count and force strength. Clean missions (≤10% losses) earn a stacking bonus; high-casualty missions apply stacking exponential penalties.", "effectKey": "meridian", "effectValue": { "tier": 1 } }
+    ]
+  },
+  {
+    "id": "rosarium_vocis",
+    "name": "Rosarium Vocis",
+    "category": "recruitment",
+    "description": "A sacred recruitment hall where the calls of battle are answered. Each victory carries a chance to inspire a new volunteer to join the cause — and veterans ensure they arrive properly equipped.",
+    "currentLevel": 1,
+    "maxLevel": 4,
+    "isConstructed": true,
+    "prerequisites": ["tent_block"],
+    "levels": [
+      {
+        "level": 1,
+        "costMoney": 300,
+        "costWood": 80,
+        "costMetal": 20,
+        "description": "A modest recruitment post. 20% chance of inspiring a free volunteer after each victory. New arrivals come with standard-issue gear (Rarity 1).",
+        "effectKey": "rosarium",
+        "effectValue": { "freeRecruitChance": 0.20, "recruitCost": 150, "gearRarity": 1 }
+      },
+      {
+        "level": 2,
+        "costMoney": 600,
+        "costWood": 150,
+        "costMetal": 50,
+        "description": "An expanded hall with better outfitting. 40% victory chance. Volunteers arrive with uncommon gear (Rarity 2). Recruit cost reduced to 250.",
+        "effectKey": "rosarium",
+        "effectValue": { "freeRecruitChance": 0.40, "recruitCost": 250, "gearRarity": 2 }
+      },
+      {
+        "level": 3,
+        "costMoney": 1200,
+        "costWood": 200,
+        "costMetal": 120,
+        "description": "A prestigious hall that attracts seasoned volunteers. 60% victory chance. Volunteers arrive with rare gear (Rarity 3). Recruit cost reduced to 400.",
+        "effectKey": "rosarium",
+        "effectValue": { "freeRecruitChance": 0.60, "recruitCost": 400, "gearRarity": 3 }
+      },
+      {
+        "level": 4,
+        "costMoney": 2500,
+        "costWood": 300,
+        "costMetal": 250,
+        "description": "A legendary hall renowned across Waelfeld. 80% victory chance. Volunteers arrive with very rare gear (Rarity 4), with heroines receiving legendary loadouts (Rarity 5).",
+        "effectKey": "rosarium",
+        "effectValue": { "freeRecruitChance": 0.80, "recruitCost": 700, "gearRarity": 4 }
+      }
     ]
   }
 ]

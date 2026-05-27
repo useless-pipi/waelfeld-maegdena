@@ -5,6 +5,66 @@ import { getMaidenIcon } from '../utils/portraits';
 import { computePersonalMoraleBase } from '../engine/combat';
 import type { Maiden } from '../types/maiden';
 import { v4 as uuidv4 } from 'uuid';
+import tagsData from '../data/tags.json';
+import type { TagDef } from '../types/stats';
+
+const _TAG_DEFS: Record<string, TagDef> = Object.fromEntries(
+  (tagsData as TagDef[]).map(td => [td.id, td])
+);
+
+/** Return the effective strategy stat for a maiden, including equipment, qualification and tag bonuses. */
+function effectiveStrategy(m: Maiden): number {
+  let bonus = 0;
+  for (const eq of m.equipment)
+    for (const b of eq.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
+  for (const q of m.qualifications)
+    for (const b of q.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
+  for (const tag of m.tags) {
+    const def = _TAG_DEFS[tag.id];
+    if (def) for (const b of def.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
+  }
+  return m.stats.strategy + bonus;
+}
+
+/** Return the effective charm stat for a maiden, including flat equipment bonuses. */
+function effectiveCharm(m: Maiden): number {
+  let bonus = 0;
+  for (const eq of m.equipment)
+    for (const b of eq.bonuses) if (b.stat === 'charm' && !b.isPercent) bonus += b.value;
+  for (const q of m.qualifications)
+    for (const b of q.bonuses) if (b.stat === 'charm' && !b.isPercent) bonus += b.value;
+  for (const tag of m.tags) {
+    const def = _TAG_DEFS[tag.id];
+    if (def) for (const b of def.bonuses) if (b.stat === 'charm' && !b.isPercent) bonus += b.value;
+  }
+  return m.stats.charm + bonus;
+}
+
+/** Auto-select a leader: heroines first, then highest charm among the pool. */
+function bestAutoLeader(members: Maiden[]): Maiden | undefined {
+  if (members.length === 0) return undefined;
+  const heroines = members.filter(m => m.type === 'heroine');
+  const pool = heroines.length > 0 ? heroines : members;
+  return pool.reduce((top, m) => effectiveCharm(m) > effectiveCharm(top) ? m : top);
+}
+
+/**
+ * Sort member IDs: leader first, then heroines, then by id.
+ * Pass the full maidens list and the resolved leaderId.
+ */
+function sortMemberIds(ids: string[], allMaidens: Maiden[], leaderId: string | undefined): string[] {
+  const byId = new Map(allMaidens.map(m => [m.id, m]));
+  return [...ids].sort((a, b) => {
+    if (a === leaderId) return -1;
+    if (b === leaderId) return 1;
+    const ma = byId.get(a);
+    const mb = byId.get(b);
+    const ha = ma?.type === 'heroine' ? 0 : 1;
+    const hb = mb?.type === 'heroine' ? 0 : 1;
+    if (ha !== hb) return ha - hb;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
 
 export default function Composition() {
   const { teams, maidens, setTeam, addTeam, removeTeam, defaultTeamId, setDefaultTeamId } = useGameStore();
@@ -32,10 +92,11 @@ export default function Composition() {
   const handleDropToTeam = () => {
     if (!draggedMaidenId || !editTeam) return;
     if (editTeam.memberIds.includes(draggedMaidenId)) return; // Already in team
-    const newMemberIds = [...editTeam.memberIds, draggedMaidenId];
+    const newLeaderId = editTeam.leaderId ?? draggedMaidenId;
+    const newMemberIds = sortMemberIds([...editTeam.memberIds, draggedMaidenId], maidens, newLeaderId);
     setTeam(editTeam.id, {
       memberIds: newMemberIds,
-      leaderId: editTeam.leaderId ?? draggedMaidenId,
+      leaderId: newLeaderId,
     });
     setDraggedMaidenId(null);
   };
@@ -51,12 +112,13 @@ export default function Composition() {
   };
 
   const handleCreateTeam = (name: string, memberIds: string[], compositionChoiceId: string | undefined, leaderId: string | undefined) => {
+    const resolvedLeaderId = leaderId || undefined;
     const newTeam = {
       id: uuidv4(),
       name,
       type: 'maiden' as const,
-      memberIds,
-      leaderId: leaderId || undefined,
+      memberIds: sortMemberIds(memberIds, maidens, resolvedLeaderId),
+      leaderId: resolvedLeaderId,
       compositionChoiceId: compositionChoiceId || undefined,
     };
     addTeam(newTeam);
@@ -97,7 +159,7 @@ export default function Composition() {
             onClick={e => e.stopPropagation()}
             style={{
               background: 'var(--color-bg)', border: '1px solid var(--color-accent)', borderRadius: 10,
-              padding: 24, width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto',
+              padding: 24, width: '100%', maxWidth: 1080, maxHeight: '90vh', overflowY: 'auto',
               boxShadow: '0 12px 48px rgba(0,0,0,0.8)',
             }}
           >
@@ -109,129 +171,144 @@ export default function Composition() {
               >✕</button>
             </div>
 
-            {/* Team members drop area */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Team Members</div>
-              {teamMembers.length > 0 && (() => {
-                const totalFood = teamMembers.reduce((s, m) => s + 20 + m.stats.strength, 0);
-                return (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-                    <span style={{ color: 'var(--color-text-muted)' }}>Total ration cost:</span>
-                    <span style={{ color: '#c8a84b', fontWeight: 'bold', fontFamily: 'monospace' }}>🍞 {totalFood}</span>
-                  </div>
-                );
-              })()}
-            </div>
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDropToTeam}
-              style={{
-                minHeight: 100,
-                padding: 12,
-                background: 'var(--color-surface)',
-                border: `2px dashed ${draggedMaidenId && !editTeam.memberIds.includes(draggedMaidenId) ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                borderRadius: 8,
-                marginBottom: 16,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 10,
-                alignContent: 'flex-start',
-              }}
-            >
-              {[...teamMembers].sort((a, b) =>
-                a.id === editTeam.leaderId ? -1 : b.id === editTeam.leaderId ? 1 : 0
-              ).map(m => (
-                <MaidenCard
-                  key={m.id}
-                  maiden={m}
-                  isLeader={editTeam.leaderId === m.id}
-                  onSetLeader={() => setTeam(editTeam.id, { leaderId: editTeam.leaderId === m.id ? undefined : m.id })}
-                  onDragStart={() => handleDragStart(m.id)}
-                  onDragEnd={handleDragEnd}
-                  isDragging={draggedMaidenId === m.id}
-                  onRemove={() => {
-                    const newMemberIds = editTeam.memberIds.filter(id => id !== m.id);
-                    let newLeaderId = editTeam.leaderId === m.id ? undefined : editTeam.leaderId;
-                    if (editTeam.leaderId === m.id) {
-                      const remaining = teamMembers.filter(tm => tm.id !== m.id);
-                      const best = remaining.reduce<Maiden | null>(
-                        (top, tm) => (!top || tm.stats.strategy > top.stats.strategy ? tm : top),
-                        null
-                      );
-                      newLeaderId = best?.id ?? undefined;
-                    }
-                    setTeam(editTeam.id, { memberIds: newMemberIds, leaderId: newLeaderId });
-                  }}
-                />
-              ))}
-              {teamMembers.length === 0 && (
-                <div style={{ color: 'var(--color-text-muted)', fontSize: 12, width: '100%', textAlign: 'center', padding: 16 }}>
-                  Drag maidens here or click an available maiden below to add
+            {/* Two-column layout: Team members | Available maidens */}
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
+
+              {/* Left column — Team Members */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Team Members</div>
+                  {teamMembers.length > 0 && (() => {
+                    const totalFood = teamMembers.reduce((s, m) => s + 20 + m.stats.strength, 0);
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                        <span style={{ color: 'var(--color-text-muted)' }}>Rations:</span>
+                        <span style={{ color: '#c8a84b', fontWeight: 'bold', fontFamily: 'monospace' }}>🍞 {totalFood}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
-              )}
-            </div>
-
-            {/* Composition choice */}
-            <TeamEditor team={editTeam} onUpdate={(patch: any) => setTeam(editTeam.id, patch)} compositions={compositionsData} />
-
-            {/* Available maidens */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0 6px' }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Available Maidens <span style={{ color: '#666' }}>(click or drag to add)</span></div>
-              {unassignedMaidens.length > 0 && (
-                <button
-                  onClick={() => {
-                    const allIds = [...editTeam.memberIds, ...unassignedMaidens.map(m => m.id)];
-                    // Pick best-strategy maiden as leader if none set
-                    let newLeaderId = editTeam.leaderId;
-                    if (!newLeaderId && allIds.length > 0) {
-                      const all = maidens.filter(m => allIds.includes(m.id));
-                      newLeaderId = [...all].sort((a, b) => b.stats.strategy - a.stats.strategy)[0]?.id;
-                    }
-                    setTeam(editTeam.id, { memberIds: allIds, leaderId: newLeaderId });
-                  }}
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleDropToTeam}
                   style={{
-                    padding: '3px 10px', fontSize: 11, background: 'rgba(200,149,74,0.15)',
-                    color: 'var(--color-accent)', border: '1px solid var(--color-accent-dark)',
-                    borderRadius: 4, cursor: 'pointer', fontWeight: 'bold',
+                    minHeight: 180,
+                    padding: 12,
+                    background: 'var(--color-surface)',
+                    border: `2px dashed ${draggedMaidenId && !editTeam.memberIds.includes(draggedMaidenId) ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                    borderRadius: 8,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    alignContent: 'flex-start',
                   }}
-                >+ Add All</button>
-              )}
-            </div>
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDropToUnassigned}
-              style={{
-                minHeight: 80,
-                padding: 12,
-                background: 'var(--color-surface)',
-                border: `2px dashed ${draggedMaidenId && editTeam.memberIds.includes(draggedMaidenId) ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                borderRadius: 8,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 10,
-                alignContent: 'flex-start',
-              }}
-            >
-              {unassignedMaidens.map(m => (
-                <MaidenCard
-                  key={m.id}
-                  maiden={m}
-                  isLeader={false}
-                  onDragStart={() => handleDragStart(m.id)}
-                  onDragEnd={handleDragEnd}
-                  isDragging={draggedMaidenId === m.id}
-                  onAdd={() => setTeam(editTeam.id, {
-                    memberIds: [...editTeam.memberIds, m.id],
-                    leaderId: editTeam.leaderId ?? m.id,
-                  })}
-                />
-              ))}
-              {unassignedMaidens.length === 0 && (
-                <div style={{ color: 'var(--color-text-muted)', fontSize: 12, width: '100%', textAlign: 'center', padding: 16 }}>
-                  No available maidens.
+                >
+                  {[...teamMembers].sort((a, b) => {
+                    if (a.id === editTeam.leaderId) return -1;
+                    if (b.id === editTeam.leaderId) return 1;
+                    const ha = a.type === 'heroine' ? 0 : 1;
+                    const hb = b.type === 'heroine' ? 0 : 1;
+                    if (ha !== hb) return ha - hb;
+                    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+                  }).map(m => (
+                    <MaidenCard
+                      key={m.id}
+                      maiden={m}
+                      isLeader={editTeam.leaderId === m.id}
+                      onSetLeader={() => setTeam(editTeam.id, { leaderId: editTeam.leaderId === m.id ? undefined : m.id })}
+                      onDragStart={() => handleDragStart(m.id)}
+                      onDragEnd={handleDragEnd}
+                      isDragging={draggedMaidenId === m.id}
+                      onRemove={() => {
+                        const newMemberIds = editTeam.memberIds.filter(id => id !== m.id);
+                        let newLeaderId = editTeam.leaderId === m.id ? undefined : editTeam.leaderId;
+                        if (editTeam.leaderId === m.id) {
+                          const remaining = teamMembers.filter(tm => tm.id !== m.id);
+                          const best = remaining.reduce<Maiden | null>(
+                            (top, tm) => (!top || tm.stats.strategy > top.stats.strategy ? tm : top),
+                            null
+                          );
+                          newLeaderId = best?.id ?? undefined;
+                        }
+                        setTeam(editTeam.id, { memberIds: sortMemberIds(newMemberIds, maidens, newLeaderId), leaderId: newLeaderId });
+                      }}
+                    />
+                  ))}
+                  {teamMembers.length === 0 && (
+                    <div style={{ color: 'var(--color-text-muted)', fontSize: 12, width: '100%', textAlign: 'center', padding: 16 }}>
+                      Drag maidens here or click an available maiden to add
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
+
+              {/* Right column — Available Maidens */}
+              <div style={{ flex: '1 1 0', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Available Maidens <span style={{ color: '#666' }}>(click or drag)</span></div>
+                  {unassignedMaidens.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const allIds = [...editTeam.memberIds, ...unassignedMaidens.map(m => m.id)];
+                        let newLeaderId = editTeam.leaderId;
+                        if (!newLeaderId && allIds.length > 0) {
+                          const all = maidens.filter(m => allIds.includes(m.id));
+                          newLeaderId = bestAutoLeader(all)?.id;
+                        }
+                        setTeam(editTeam.id, { memberIds: sortMemberIds(allIds, maidens, newLeaderId), leaderId: newLeaderId });
+                      }}
+                      style={{
+                        padding: '3px 10px', fontSize: 11, background: 'rgba(200,149,74,0.15)',
+                        color: 'var(--color-accent)', border: '1px solid var(--color-accent-dark)',
+                        borderRadius: 4, cursor: 'pointer', fontWeight: 'bold',
+                      }}
+                    >+ Add All</button>
+                  )}
+                </div>
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleDropToUnassigned}
+                  style={{
+                    minHeight: 180,
+                    padding: 12,
+                    background: 'var(--color-surface)',
+                    border: `2px dashed ${draggedMaidenId && editTeam.memberIds.includes(draggedMaidenId) ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                    borderRadius: 8,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 10,
+                    alignContent: 'flex-start',
+                  }}
+                >
+                  {unassignedMaidens.map(m => (
+                    <MaidenCard
+                      key={m.id}
+                      maiden={m}
+                      isLeader={false}
+                      onDragStart={() => handleDragStart(m.id)}
+                      onDragEnd={handleDragEnd}
+                      isDragging={draggedMaidenId === m.id}
+                      onAdd={() => {
+                        const newLeaderId = editTeam.leaderId ?? m.id;
+                        setTeam(editTeam.id, {
+                          memberIds: sortMemberIds([...editTeam.memberIds, m.id], maidens, newLeaderId),
+                          leaderId: newLeaderId,
+                        });
+                      }}
+                    />
+                  ))}
+                  {unassignedMaidens.length === 0 && (
+                    <div style={{ color: 'var(--color-text-muted)', fontSize: 12, width: '100%', textAlign: 'center', padding: 16 }}>
+                      No available maidens.
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
+
+            {/* Composition choice — full width below the columns */}
+            <TeamEditor team={editTeam} onUpdate={(patch: any) => setTeam(editTeam.id, patch)} compositions={compositionsData} />
           </div>
         </div>
       )}
@@ -249,7 +326,7 @@ export default function Composition() {
           + New Team
         </button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 480 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {maidenTeams.map(t => (
           <TeamCard
             key={t.id} team={t} maidens={maidens}
@@ -355,8 +432,10 @@ function MaidenCard({ maiden, isLeader, onSetLeader, onDragStart, onDragEnd, isD
 }
 
 function TeamCard({ team, maidens, selected, isDefault, onSelect, onDelete, onToggleDefault }: any) {
-  const members = maidens.filter((m: any) => team.memberIds.includes(m.id));
-  const leader = maidens.find((m: any) => m.id === team.leaderId);
+  const maidenById = new Map(maidens.map((m: any) => [m.id, m]));
+  const sortedIds = sortMemberIds(team.memberIds, maidens, team.leaderId);
+  const members = sortedIds.map((id: string) => maidenById.get(id)).filter(Boolean);
+  const leader = maidenById.get(team.leaderId);
   return (
     <div
       onClick={onSelect}
@@ -372,11 +451,36 @@ function TeamCard({ team, maidens, selected, isDefault, onSelect, onDelete, onTo
           <span title="Default team — new recruits auto-join here" style={{ fontSize: 10, color: '#ffd700', fontWeight: 'bold', background: 'rgba(255,215,0,0.12)', border: '1px solid rgba(255,215,0,0.4)', borderRadius: 3, padding: '1px 5px' }}>⭐ DEFAULT</span>
         )}
       </div>
-      {leader && (
-        <div style={{ fontSize: 10, color: '#ffd700', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>👑 {leader.nickname ?? leader.name.split(' ')[0]}</div>
-      )}
-      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {members.map((m: any) => m.nickname ?? m.name.split(' ')[0]).join(', ') || 'No members'}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 12, minHeight: 36 }}>
+        {members.length === 0 && (
+          <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>No members</span>
+        )}
+        {members.map((m: any) => {
+          const isLeaderM = m.id === team.leaderId;
+          const isHeroine = m.type === 'heroine';
+          return (
+            <div
+              key={m.id}
+              title={`${m.nickname ?? m.name.split(' ')[0]}${isLeaderM ? ' (Leader)' : ''}${isHeroine ? ' ★' : ''}`}
+              style={{ position: 'relative', flexShrink: 0 }}
+            >
+              {isLeaderM && (
+                <div style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', fontSize: 10, lineHeight: 1, zIndex: 1 }}>👑</div>
+              )}
+              <img
+                src={getMaidenIcon(m.imgId)}
+                alt={m.name}
+                style={{
+                  width: 32, height: 32, objectFit: 'cover', borderRadius: 3,
+                  border: isLeaderM ? '2px solid #ffd700' : isHeroine ? '2px solid #ffd700' : '1px solid var(--color-border)',
+                  boxShadow: isHeroine ? '0 0 5px rgba(255,215,0,0.55)' : 'none',
+                  marginTop: isLeaderM ? 6 : 0,
+                  opacity: m.currentHp <= 0 ? 0.4 : 1,
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
       {/* Default toggle */}
       <button
@@ -450,17 +554,14 @@ function CreateTeamModal({ allMaidens, teams, compositions, onConfirm, onCancel 
   };
 
   const handleConfirm = () => {
-    // Auto-assign leader: pick highest-strategy selected member if none chosen
-    const resolvedLeaderId = leaderId
-      || (selectedMembers.length > 0
-        ? [...selectedMembers].sort((a, b) => b.stats.strategy - a.stats.strategy)[0].id
-        : undefined);
+    // Auto-assign leader: heroine-first then highest-charm if none chosen
+    const resolvedLeaderId = leaderId || bestAutoLeader(selectedMembers)?.id;
 
     // Auto-name: use leader's display name if team name left blank
     const resolvedLeader = resolvedLeaderId ? allMaidens.find(m => m.id === resolvedLeaderId) : undefined;
     const trimmed = teamName.trim()
       || (resolvedLeader ? (resolvedLeader.nickname ?? resolvedLeader.name.split(' ')[0]) + "'s Team" : '');
-    if (!trimmed) { setNameError('Team name is required.'); return; }
+    if (!trimmed) { setNameError('Team name is required (no members selected to auto-name from).'); return; }
     if (teams.some(t => t.name.toLowerCase() === trimmed.toLowerCase())) {
       setNameError('A team with that name already exists.'); return;
     }
@@ -497,9 +598,25 @@ function CreateTeamModal({ allMaidens, teams, compositions, onConfirm, onCancel 
         {nameError && <div style={{ fontSize: 11, color: 'var(--color-danger)', marginBottom: 12 }}>{nameError}</div>}
 
         {/* Member selection */}
-        <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 8 }}>
-          Select Initial Members <span style={{ color: '#666' }}>({selectedMemberIds.length} selected)</span>
-        </label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <label style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            Select Initial Members <span style={{ color: '#666' }}>({selectedMemberIds.length} selected)</span>
+          </label>
+          {allMaidens.some(m => !teams.some(t => t.memberIds.includes(m.id)) && !selectedMemberIds.includes(m.id)) && (
+            <button
+              onClick={() => {
+                const allAvail = allMaidens.filter(m => !teams.some(t => t.memberIds.includes(m.id))).map(m => m.id);
+                setSelectedMemberIds(allAvail);
+                setLeaderId('');
+              }}
+              style={{
+                padding: '3px 10px', fontSize: 11, background: 'rgba(200,149,74,0.15)',
+                color: 'var(--color-accent)', border: '1px solid var(--color-accent-dark)',
+                borderRadius: 4, cursor: 'pointer', fontWeight: 'bold',
+              }}
+            >+ Add All</button>
+          )}
+        </div>
         {allMaidens.length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>No maidens available to recruit.</div>
         ) : (
@@ -545,12 +662,12 @@ function CreateTeamModal({ allMaidens, teams, compositions, onConfirm, onCancel 
         {selectedMembers.length > 0 && (
           <>
             <label style={{ fontSize: 12, color: 'var(--color-text-muted)', display: 'block', marginBottom: 6 }}>
-              Team Leader <span style={{ color: '#666' }}>(optional — highest strategy auto-assigned if skipped)</span>
+              Team Leader <span style={{ color: '#666' }}>(optional — heroine or highest charm auto-assigned if skipped)</span>
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: 10, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 6, marginBottom: 16 }}>
               {selectedMembers.map(m => {
                 const isL = leaderId === m.id;
-                const wouldAutoLead = !leaderId && [...selectedMembers].sort((a, b) => b.stats.strategy - a.stats.strategy)[0]?.id === m.id;
+                const wouldAutoLead = !leaderId && bestAutoLeader(selectedMembers)?.id === m.id;
                 return (
                   <div
                     key={m.id}

@@ -109,30 +109,46 @@ export function makeEquipmentInstance(id: string, locked = false): Equipment {
   return { ...template, inventoryId: uuidv4(), ...(locked ? { isLocked: true } : {}) };
 }
 
-/** Sum flat HP bonuses from equipment, qualifications, and tags. */
-export function computeHpBonus(
-  equipment: { bonuses: { stat: string; value: number; isPercent: boolean }[] }[],
-  qualifications: { bonuses: { stat: string; value: number; isPercent: boolean }[] }[],
+type BonusSource = { bonuses: { stat: string; value: number; isPercent: boolean }[] };
+
+/**
+ * Compute final maxHp for a maiden given all bonus sources.
+ * Formula: (7 + 2 × (baseCON + flat CON bonuses) + flat HP bonuses) × (1 + Σ HP% bonuses / 100), rounded.
+ */
+export function computeFullMaxHp(
+  baseCon: number,
+  equipment: BonusSource[],
+  qualifications: BonusSource[],
   tags: { id: string }[],
 ): number {
-  const tagMap = new Map<string, { bonuses: { stat: string; value: number; isPercent: boolean }[] }>(
+  const tagMap = new Map<string, BonusSource>(
     (tagsData as any[]).map((t: any) => [t.id, t])
   );
-  let bonus = 0;
-  for (const src of [...equipment, ...qualifications]) {
-    for (const b of src.bonuses) {
-      if (b.stat === 'hp' && !b.isPercent) bonus += b.value;
-    }
-  }
+  let flatHp = 0;
+  let pctHp = 0;
+  let flatCon = 0;
+  const allSources: BonusSource[] = [...equipment, ...qualifications];
   for (const tag of tags) {
     const def = tagMap.get(tag.id);
-    if (def) {
-      for (const b of def.bonuses) {
-        if (b.stat === 'hp' && !b.isPercent) bonus += b.value;
-      }
+    if (def) allSources.push(def);
+  }
+  for (const src of allSources) {
+    for (const b of src.bonuses) {
+      if (b.stat === 'hp')           { if (b.isPercent) pctHp += b.value; else flatHp += b.value; }
+      else if (b.stat === 'constitution' && !b.isPercent) { flatCon += b.value; }
     }
   }
-  return bonus;
+  const effectiveCon = baseCon + flatCon;
+  return Math.round((7 + 2 * effectiveCon + flatHp) * (1 + pctHp / 100));
+}
+
+/** @deprecated Use computeFullMaxHp instead. Returns only the flat HP bonus (ignores percent bonuses). */
+export function computeHpBonus(
+  equipment: BonusSource[],
+  qualifications: BonusSource[],
+  tags: { id: string }[],
+): number {
+  return computeFullMaxHp(0, equipment, qualifications, tags);
 }
 function randomHeroineSubjectExp(): SubjectExp {
   return {
@@ -159,11 +175,18 @@ function heroineExpData(def: HeroineDef): ExpData {
 
 /** Convert a HeroineDef into a full Maiden instance ready to join the party. */
 export function heroineDefToMaiden(def: HeroineDef): Maiden {
-  const equipment = def.equipment.map(id => makeEquipmentInstance(id, true));
+  const baseEquip = def.equipment.map(id => makeEquipmentInstance(id, true));
+  const hasArms = baseEquip.some(e => e.slot === 'arms');
+  const equipment = [
+    ...baseEquip,
+    ...(!hasArms ? [makeEquipmentInstance('field_gloves', true)] : []),
+    makeEquipmentInstance('frag_grenade'),
+    makeEquipmentInstance('field_rations'),
+    makeEquipmentInstance('healing_potion'),
+  ];
   const qualifications = def.qualifications.map(q => ({ ...q }));
   const tags = [...def.tags];
-  const hpBonus = computeHpBonus(equipment, qualifications, tags);
-  const maxHp = def.maxHp + hpBonus;
+  const maxHp = computeFullMaxHp(def.stats.constitution, equipment, qualifications as any[], tags as any[]);
   return {
     id: uuidv4(),
     type: 'heroine',
@@ -218,11 +241,11 @@ export function recruitEmergencyMaiden(): Maiden {
     makeEquipmentInstance('emergency_clothes', true),
     makeEquipmentInstance('emergency_boots', true),
     makeEquipmentInstance('basic_rifle', true),
+    makeEquipmentInstance('field_gloves', true),
   ];
   const qualifications: any[] = [];
   const tags: any[] = [...rollZakoRecruitTags(), { id: 'untrained' }];
-  const hpBonus = computeHpBonus(equipment, qualifications, tags);
-  const maxHp = Math.max(1, 7 + 2 * stats.constitution + hpBonus);
+  const maxHp = Math.max(1, computeFullMaxHp(stats.constitution, equipment, qualifications, tags));
   return {
     id: uuidv4(),
     type: 'zako',
@@ -245,6 +268,114 @@ export function recruitEmergencyMaiden(): Maiden {
     isFallen: false,
     expData: defaultExpData(),
   };
+}
+
+// ── Rosarium Vocis: enrichRecruitGear ─────────────────────────────────────────
+
+/**
+ * Re-equip a newly recruited maiden with gear appropriate for the given
+ * Rosarium Vocis gear rarity tier (1–5).
+ *
+ * - Body and legs are drawn from faction:maiden items at the highest
+ *   rarityValue ≤ gearRarity (heroines get gearRarity + 1, capped at 5).
+ * - Arms are drawn from non-faction arms items (field_gloves → power_gauntlets).
+ * - Weapon is drawn from non-faction, non-enemy weapons preserving weapon type
+ *   if possible.
+ * - Consumables scale with the tier.
+ * - All previously unlocked (non-locked) equipment is replaced.
+ */
+export function enrichRecruitGear(maiden: Maiden, gearRarity: number): Maiden {
+  const allItems = equipmentData as Equipment[];
+  const isHeroine = maiden.type === 'heroine';
+  const effectiveRarity = isHeroine ? Math.min(gearRarity + 1, 5) : gearRarity;
+
+  // Keep locked items that are NOT in the slots we intend to replace.
+  // Body/legs/arms/weapon are always replaced regardless of lock status —
+  // zako starter gear is locked to prevent accidental selling, but Rosarium
+  // should still upgrade it. Heroine signature items in other slots are kept.
+  const REPLACED_SLOTS = new Set(['body', 'legs', 'arms', 'weapon']);
+  const locked = maiden.equipment.filter(e => (e as any).isLocked && !REPLACED_SLOTS.has(e.slot as string));
+  const newEquip: Equipment[] = [...locked];
+
+  // lockedSlots tracks slots already filled by the kept locked items (non-replaced slots only)
+  const lockedSlots = new Set(locked.map(e => e.slot as string));
+
+  // Pick best maiden-faction item for a slot
+  const pickMaidenSlot = (slot: string): Equipment | null => {
+    if (lockedSlots.has(slot)) return null;
+    const pool = allItems.filter(e =>
+      e.slot === slot &&
+      (e as any).faction === 'maiden' &&
+      !(e as any).quantity &&
+      ((e as any).rarityValue ?? 1) <= effectiveRarity
+    );
+    if (!pool.length) return null;
+    const maxR = Math.max(...pool.map(e => (e as any).rarityValue ?? 1));
+    const best = pool.filter(e => ((e as any).rarityValue ?? 1) === maxR);
+    return best[Math.floor(Math.random() * best.length)];
+  };
+
+  // Body
+  const body = pickMaidenSlot('body');
+  if (body) newEquip.push(makeEquipmentInstance(body.id));
+
+  // Legs
+  const legs = pickMaidenSlot('legs');
+  if (legs) newEquip.push(makeEquipmentInstance(legs.id));
+
+  // Arms (non-faction, non-enemy)
+  if (!lockedSlots.has('arms')) {
+    const armsPool = allItems.filter(e =>
+      e.slot === 'arms' &&
+      !(e as any).faction &&
+      !(e as any).quantity &&
+      ((e as any).rarityValue ?? 1) <= effectiveRarity
+    );
+    if (armsPool.length) {
+      const maxR = Math.max(...armsPool.map(e => (e as any).rarityValue ?? 1));
+      const best = armsPool.filter(e => ((e as any).rarityValue ?? 1) === maxR);
+      const chosen = best[Math.floor(Math.random() * best.length)];
+      newEquip.push(makeEquipmentInstance(chosen.id));
+    }
+  }
+
+  // Weapon (non-faction/maiden-faction, non-enemy)
+  if (!lockedSlots.has('weapon')) {
+    const existingWeapon = maiden.equipment.find(e => e.slot === 'weapon');
+    const weaponType = existingWeapon ? (existingWeapon as any).weaponType as string | undefined : undefined;
+    const weaponPool = allItems.filter(e =>
+      e.slot === 'weapon' &&
+      ((e as any).faction === 'maiden' || !(e as any).faction) &&
+      !['enemy', 'lyssa'].includes((e as any).faction ?? '') &&
+      !(e as any).quantity &&
+      ((e as any).rarityValue ?? 1) <= effectiveRarity
+    );
+    // Prefer same weapon type; fall back to any weapon
+    let weapon: Equipment | undefined = weaponType
+      ? weaponPool.filter(e => (e as any).weaponType === weaponType)
+          .sort((a, b) => ((b as any).rarityValue ?? 1) - ((a as any).rarityValue ?? 1))[0]
+      : undefined;
+    if (!weapon) weapon = weaponPool.sort((a, b) => ((b as any).rarityValue ?? 1) - ((a as any).rarityValue ?? 1))[0];
+    if (weapon) newEquip.push(makeEquipmentInstance(weapon.id));
+  }
+
+  // Consumables scaled by rarity tier
+  const potionId   = effectiveRarity >= 4 ? 'premium_potion'      : effectiveRarity >= 3 ? 'advanced_potion'    : effectiveRarity >= 2 ? 'field_potion'       : 'healing_potion';
+  const rationsId  = effectiveRarity >= 4 ? 'elite_rations'        : effectiveRarity >= 3 ? 'highgrade_rations'  : effectiveRarity >= 2 ? 'improved_rations'    : 'field_rations';
+  const grenadeId  = effectiveRarity >= 4 ? 'void_grenade'         : effectiveRarity >= 3 ? 'incendiary_grenade' : effectiveRarity >= 2 ? 'concussion_grenade'  : 'frag_grenade';
+
+  const findAndAdd = (id: string) => {
+    const tmpl = allItems.find(e => e.id === id);
+    if (tmpl) newEquip.push(makeEquipmentInstance(id));
+  };
+  findAndAdd(potionId);
+  findAndAdd(rationsId);
+  findAndAdd(grenadeId);
+
+  // Recompute maxHp — flat bonuses first, then percent multiplier applied on top
+  const newMaxHp = computeFullMaxHp(maiden.stats.constitution, newEquip, maiden.qualifications as any[], maiden.tags as any[]);
+
+  return { ...maiden, equipment: newEquip, maxHp: newMaxHp, currentHp: newMaxHp };
 }
 
 /**
@@ -281,16 +412,18 @@ export function recruitMaiden(existingMaidens: Maiden[] = []): Maiden {
     awareness: randomStat(),
     charm: randomStat(),
   };
-  const maxHp = 7 + 2 * stats.constitution;
   const equipment = [
     makeEquipmentInstance('maiden_dress_standard', true),
     makeEquipmentInstance('maiden_boots_standard', true),
     makeEquipmentInstance('basic_rifle', true),
+    makeEquipmentInstance('field_gloves', true),
+    makeEquipmentInstance('frag_grenade'),
+    makeEquipmentInstance('field_rations'),
+    makeEquipmentInstance('healing_potion'),
   ];
   const qualifications: any[] = [];
   const tags: any[] = rollZakoRecruitTags();
-  const hpBonus = computeHpBonus(equipment, qualifications, tags);
-  const fullMaxHp = maxHp + hpBonus;
+  const fullMaxHp = computeFullMaxHp(stats.constitution, equipment, qualifications, tags);
   return {
     id: uuidv4(),
     type: 'zako',

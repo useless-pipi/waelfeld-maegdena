@@ -9,12 +9,13 @@ import type { Equipment } from '../types/equipment';
 import type { MBase } from '../types/mbase';
 import type { ExpGain } from '../engine/combat';
 import { getStat } from '../engine/combat';
-import { computeMaxCarryWeight, computeCarryWeight } from '../engine/recruit';
+import { computeMaxCarryWeight, computeCarryWeight, computeFullMaxHp } from '../engine/recruit';
 import { generateMissionSet, computeForceStrengthIndex } from '../engine/missionGen';
 import { generateHQShopItems } from '../engine/hqShop';
 import { INITIAL_SAVE } from '../data/seed';
 import equipmentData from '../data/equipment.json';
 import buildingsData from '../data/buildings.json';
+import { readAutoRecruit, writeAutoRecruit } from '../utils/settings';
 
 const SAVE_KEY = 'wm_save_v1';
 
@@ -31,6 +32,10 @@ function migrateSaveData(saved: SaveData): SaveData {
   saved.buildings = (saved.buildings ?? []).map(savedB => {
     const canonical = (buildingsData as Building[]).find(b => b.id === savedB.id);
     if (!canonical) return savedB;
+    // Ensure rosarium_vocis is always at least Level 1 (handles saves that had it at 0)
+    if (savedB.id === 'rosarium_vocis' && (!savedB.isConstructed || savedB.currentLevel < 1)) {
+      return { ...savedB, description: canonical.description, maxLevel: canonical.maxLevel, levels: canonical.levels, currentLevel: 1, isConstructed: true };
+    }
     return {
       ...savedB,
       description: canonical.description,
@@ -41,6 +46,49 @@ function migrateSaveData(saved: SaveData): SaveData {
   // 3. Default optional top-level fields that may be missing in older saves
   if (!saved.hqShopItems) saved.hqShopItems = [];
   if (!saved.meridianStats) saved.meridianStats = { recentMissions: [], totalMissionsDone: 0 };
+  if (saved.missionsUntilNextWave === undefined) saved.missionsUntilNextWave = 20;
+  if (saved.consecutiveEasyMissions === undefined) saved.consecutiveEasyMissions = 0;
+  // autoRecruit is now cookie-based — strip it from save data if present
+  delete (saved as any).autoRecruit;
+  // 4. Back-fill starter consumables onto maidens who pre-date the consumables rework.
+  //    A maiden needs the item if she has zero instances of that consumable slot id.
+  const STARTER_CONSUMABLES = ['healing_potion', 'field_rations', 'frag_grenade'] as const;
+  const eqTemplates = equipmentData as any[];
+  if (saved.maidens) {
+    saved.maidens = saved.maidens.map(maiden => {
+      if (maiden.isFallen || maiden.isCaptured) return maiden;
+      const extra: any[] = [];
+      for (const cid of STARTER_CONSUMABLES) {
+        const already = maiden.equipment.some((e: any) => e.id === cid);
+        if (!already) {
+          const tmpl = eqTemplates.find(e => e.id === cid);
+          if (tmpl) extra.push({ ...tmpl, inventoryId: crypto.randomUUID() });
+        }
+      }
+      if (extra.length === 0) return maiden;
+      return { ...maiden, equipment: [...maiden.equipment, ...extra] };
+    });
+  }
+  // 5. Recompute maxHp for all active maidens so that percent HP bonuses
+  //    (e.g. heroine tag +25%) and CON bonuses are correctly reflected.
+  //    Adjust currentHp proportionally: full-health maidens stay full; injured keep ratio.
+  if (saved.maidens) {
+    saved.maidens = saved.maidens.map(maiden => {
+      if (maiden.isFallen || maiden.isCaptured) return maiden;
+      const newMaxHp = computeFullMaxHp(
+        maiden.stats.constitution,
+        maiden.equipment as any[],
+        maiden.qualifications as any[],
+        maiden.tags as any[],
+      );
+      if (newMaxHp === maiden.maxHp) return maiden;
+      const wasFullHealth = maiden.currentHp >= maiden.maxHp;
+      const newCurrentHp = wasFullHealth
+        ? newMaxHp
+        : Math.max(1, Math.min(Math.round(maiden.currentHp * newMaxHp / maiden.maxHp), newMaxHp));
+      return { ...maiden, maxHp: newMaxHp, currentHp: newCurrentHp };
+    });
+  }
   return saved;
 }
 
@@ -49,12 +97,14 @@ function loadFromStorage(): SaveData {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
       const saved = JSON.parse(raw) as SaveData;
-      return migrateSaveData(saved);
+      const migrated = migrateSaveData(saved);
+      migrated.autoRecruit = readAutoRecruit();
+      return migrated;
     }
   } catch {
     // corrupt save — ignore
   }
-  return INITIAL_SAVE;
+  return { ...INITIAL_SAVE, autoRecruit: readAutoRecruit() };
 }
 
 interface GameState extends SaveData {
@@ -72,13 +122,14 @@ interface GameState extends SaveData {
   removeInventoryItem: (inventoryId: string) => void;
   /**
    * Atomically equip an item to a maiden.
-   * Handles weapon-slot swap, cross-maiden transfer, and inventory tracking.
+   * Handles exclusive-slot swap (weapon/head/mask/body/arms/legs), cross-maiden transfer, and inventory tracking.
    * ownerMaidenId: set if the item is currently equipped by another maiden (null = from stock).
    */
   equipItem: (targetMaidenId: string, item: Equipment, ownerMaidenId: string | null) => void;
   /** Atomically unequip an item from a maiden back to stock. */
   unequipItem: (maidenId: string, item: Equipment) => void;
   decrementFreeRecruit: () => void;
+  incrementFreeRecruit: () => void;
   setDefaultTeamId: (teamId: string | undefined) => void;
   combatLocked: boolean;
   setCombatLocked: (locked: boolean) => void;
@@ -116,10 +167,20 @@ interface GameState extends SaveData {
   refreshMissions: () => void;
   /** Regenerate the HQ shop items for the current Radio Center tier. Costs `cost` gold (0 = free). */
   refreshHQShop: (cost?: number) => void;
-  /** Record a mission's result in the rolling Meridian review window (last 10 missions). */
+  /** Record a mission's result in the rolling Meridian review window (last 10 missions). Also tracks consecutive easy mission streak. */
   recordMeridianMission: (record: MeridianMissionRecord) => void;
+  /** Increment or reset the consecutive easy missions streak counter. */
+  trackEasyStreak: (difficulty: string) => void;
   /** Compute and apply Meridian HQ support (money + metal) after a mission conclusion. */
   applyMeridianSupport: (tier: number) => void;
+  /** Consume 7 Revenant Blooms from the stockpile to revive a fallen heroine. */
+  reviveHeroine: (maidenId: string) => void;
+  /** Toggle the auto-recruit setting. */
+  setAutoRecruit: (value: boolean) => void;
+  /** Decrement the lyssa-wave countdown by 1 (min 0). Call after every non-wave mission. */
+  decrementMissionsUntilWave: () => void;
+  /** Reset the lyssa-wave countdown to N for the current FSI tier. Call after beating a wave. */
+  completeLyssaWave: () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => {
@@ -144,13 +205,22 @@ export const useGameStore = create<GameState>((set, get) => {
         if (s.defaultTeamId) {
           const team = s.teams.find(t => t.id === s.defaultTeamId);
           if (team && !team.memberIds.includes(maiden.id)) {
-            const newMemberIds = [...team.memberIds, maiden.id];
+            const rawMemberIds = [...team.memberIds, maiden.id];
             // Auto-assign leader if team is currently empty
             let newLeaderId = team.leaderId;
             if (team.memberIds.length === 0) {
-              // Best strategy among new roster (just this maiden at this point)
               newLeaderId = maiden.id;
             }
+            // Sort: leader first, then heroines, then by id
+            const allMaidensMap = new Map([...newMaidens].map(m => [m.id, m]));
+            const newMemberIds = [...rawMemberIds].sort((a, b) => {
+              if (a === newLeaderId) return -1;
+              if (b === newLeaderId) return 1;
+              const ha = allMaidensMap.get(a)?.type === 'heroine' ? 0 : 1;
+              const hb = allMaidensMap.get(b)?.type === 'heroine' ? 0 : 1;
+              if (ha !== hb) return ha - hb;
+              return a < b ? -1 : a > b ? 1 : 0;
+            });
             return {
               maidens: newMaidens,
               teams: s.teams.map(t =>
@@ -214,10 +284,12 @@ export const useGameStore = create<GameState>((set, get) => {
         const target = s.maidens.find(m => m.id === targetMaidenId);
         if (!target) return s;
 
-        const isWeapon = item.slot === 'weapon';
+        // Slots that allow only one item at a time — equipping displaces the existing one
+        const EXCLUSIVE_SLOTS = new Set<string>(['weapon', 'head', 'mask', 'body', 'arms', 'legs']);
+        const isExclusive = EXCLUSIVE_SLOTS.has(item.slot);
 
-        // Target's current weapon that will be displaced (if any)
-        const displaced = isWeapon ? target.equipment.find(e => e.slot === 'weapon') : undefined;
+        // Displaced item in the same exclusive slot (if any)
+        const displaced = isExclusive ? target.equipment.find(e => e.slot === item.slot) : undefined;
 
         // Weight capacity check
         const currentWeight = computeCarryWeight(target.equipment);
@@ -236,21 +308,19 @@ export const useGameStore = create<GameState>((set, get) => {
 
         let newMaidens = s.maidens.map(m => {
           if (m.id === ownerMaidenId) {
-            // Remove item from owner. For weapon swaps give displaced weapon to owner instead.
+            // Remove item from owner. For exclusive-slot swaps give displaced item to owner instead.
             const withoutItem = m.equipment.filter(e => !sameItem(e, item));
-            if (isWeapon && displaced) {
+            if (isExclusive && displaced) {
               return { ...m, equipment: [...withoutItem, displaced] };
             }
             return { ...m, equipment: withoutItem };
           }
           if (m.id === targetMaidenId) {
-            const base = isWeapon ? m.equipment.filter(e => e.slot !== 'weapon') : m.equipment;
-            // Compute HP delta: new item's HP bonuses minus any displaced weapon's HP bonuses
-            const hpDelta = item.bonuses.filter(b => b.stat === 'hp' && !b.isPercent).reduce((s, b) => s + b.value, 0)
-              - (displaced?.bonuses.filter(b => b.stat === 'hp' && !b.isPercent).reduce((s, b) => s + b.value, 0) ?? 0);
-            const newMaxHp = m.maxHp + hpDelta;
-            const newCurrentHp = Math.min(m.currentHp + Math.max(0, hpDelta), newMaxHp);
-            return { ...m, equipment: [...base, item], maxHp: newMaxHp, currentHp: newCurrentHp };
+            const base = isExclusive ? m.equipment.filter(e => e.slot !== item.slot) : m.equipment;
+            const newEquipment = [...base, item];
+            const newMaxHp = computeFullMaxHp(m.stats.constitution, newEquipment, m.qualifications as any[], m.tags as any[]);
+            const newCurrentHp = Math.min(m.currentHp + Math.max(0, newMaxHp - m.maxHp), newMaxHp);
+            return { ...m, equipment: newEquipment, maxHp: newMaxHp, currentHp: newCurrentHp };
           }
           return m;
         });
@@ -274,12 +344,12 @@ export const useGameStore = create<GameState>((set, get) => {
       set(s => {
         const sameItem = (a: Equipment, b: Equipment) =>
           a.inventoryId && b.inventoryId ? a.inventoryId === b.inventoryId : a.id === b.id;
-        const hpDelta = item.bonuses.filter(b => b.stat === 'hp' && !b.isPercent).reduce((s, b) => s + b.value, 0);
         const newMaidens = s.maidens.map(m => {
           if (m.id !== maidenId) return m;
-          const newMaxHp = m.maxHp - hpDelta;
+          const newEquipment = m.equipment.filter(e => !sameItem(e, item));
+          const newMaxHp = computeFullMaxHp(m.stats.constitution, newEquipment, m.qualifications as any[], m.tags as any[]);
           const newCurrentHp = Math.max(1, Math.min(m.currentHp, newMaxHp));
-          return { ...m, equipment: m.equipment.filter(e => !sameItem(e, item)), maxHp: newMaxHp, currentHp: newCurrentHp };
+          return { ...m, equipment: newEquipment, maxHp: newMaxHp, currentHp: newCurrentHp };
         });
         // Always add the unequipped item back to inventory — the maiden and stockpile
         // can legitimately hold separate copies of the same item type.
@@ -289,6 +359,9 @@ export const useGameStore = create<GameState>((set, get) => {
 
     decrementFreeRecruit: () =>
       set(s => ({ freeRecruitCount: Math.max(0, s.freeRecruitCount - 1) })),
+
+    incrementFreeRecruit: () =>
+      set(s => ({ freeRecruitCount: s.freeRecruitCount + 1 })),
 
     combatLocked: false,
     setCombatLocked: (locked) => set({ combatLocked: locked }),
@@ -404,7 +477,7 @@ export const useGameStore = create<GameState>((set, get) => {
           const entry = gainMap.get(g.maidenId) ?? { scout: 0, sneak: 0 };
           if (g.subject === 'weapon' && g.weaponType) {
             entry.weapon = entry.weapon ?? {};
-            entry.weapon[g.weaponType] = (entry.weapon[g.weaponType] ?? 0) + 1;
+            entry.weapon[g.weaponType] = (entry.weapon[g.weaponType] ?? 0) + (g.amount ?? 1);
           } else if (g.subject === 'scout') {
             entry.scout += 1;
           } else if (g.subject === 'sneak') {
@@ -466,11 +539,12 @@ export const useGameStore = create<GameState>((set, get) => {
           }
           return m;
         }),
-        // Remove captured (and escaped) maidens from all team rosters
-        teams: capturedIds.length === 0 && escapedIds.length === 0
+        // Remove ONLY captured maidens from all team rosters.
+        // Escaped maidens stay in their team — they return after the mission.
+        teams: capturedIds.length === 0
           ? s.teams
           : s.teams.map(t => {
-              const removedIds = new Set([...capturedIds, ...escapedIds]);
+              const removedIds = new Set(capturedIds);
               if (!t.memberIds.some(id => removedIds.has(id))) return t;
               const newMemberIds = t.memberIds.filter(id => !removedIds.has(id));
               const newLeaderId = t.leaderId && removedIds.has(t.leaderId)
@@ -504,7 +578,11 @@ export const useGameStore = create<GameState>((set, get) => {
     postMissionReset: () =>
       set(s => ({
         maidens: s.maidens.map(m => {
-          if (m.isFallen) return m;
+          // Treat HP=0 as fallen regardless of flag (cleans up any inconsistent state)
+          if (m.isFallen || m.currentHp <= 0) {
+            if (!m.isFallen) return { ...m, isFallen: true, isDeployed: false };
+            return m;
+          }
           // Non-captured maidens: clear escaped status and ensure morale floor of 20
           if (!m.isCaptured) {
             const permanent = m.moralePermanentBonus ?? 0;
@@ -520,8 +598,11 @@ export const useGameStore = create<GameState>((set, get) => {
     refreshMissions: () => {
       const s = get();
       const capturedMaidens = s.maidens.filter(m => m.isCaptured && !m.isFallen);
-      const newMissions = generateMissionSet(s.maidens, capturedMaidens);
-      set({ missions: newMissions });
+      const lyssaWavePending = (s.missionsUntilNextWave ?? 20) <= 0;
+      const forceNoEasy = (s.consecutiveEasyMissions ?? 0) >= 5;
+      const newMissions = generateMissionSet(s.maidens, capturedMaidens, lyssaWavePending, forceNoEasy);
+      // When forced, reset streak so the lock lifts once the player plays a non-easy mission
+      set({ missions: newMissions, ...(forceNoEasy ? { consecutiveEasyMissions: 0 } : {}) });
     },
 
     refreshHQShop: (cost = 0) => {
@@ -541,35 +622,49 @@ export const useGameStore = create<GameState>((set, get) => {
       set(s => {
         const stats = s.meridianStats ?? { recentMissions: [], totalMissionsDone: 0 };
         const updated = [...stats.recentMissions, record].slice(-10);
-        return { meridianStats: { recentMissions: updated, totalMissionsDone: (stats.totalMissionsDone ?? 0) + 1 } };
+        // Track consecutive easy streak here alongside the main record
+        const current = s.consecutiveEasyMissions ?? 0;
+        const newStreak = record.difficulty === 'easy' ? Math.min(current + 1, 5) : 0;
+        return {
+          meridianStats: { recentMissions: updated, totalMissionsDone: (stats.totalMissionsDone ?? 0) + 1 },
+          consecutiveEasyMissions: newStreak,
+        };
       }),
+
+    trackEasyStreak: (difficulty) =>
+      set(s => ({
+        consecutiveEasyMissions: difficulty === 'easy'
+          ? Math.min((s.consecutiveEasyMissions ?? 0) + 1, 5)
+          : 0,
+      })),
 
     applyMeridianSupport: (tier) =>
       set(s => {
         const { fsi } = computeForceStrengthIndex(s.maidens);
         const allRecent = (s.meridianStats?.recentMissions ?? []).slice(-10);
         // Only count wins toward difficulty-weighted score; losses still affect death penalty
-        const diffWeight = { easy: 0.6, normal: 1.0, hard: 1.5, extreme: 2.2 };
+        const diffWeight = { easy: 1, normal: 2, hard: 10, extreme: 40, hell: 100 };
         const winRecords = allRecent.filter(r => r.isWin);
         const diffScore = winRecords.reduce((a, r) => a + (diffWeight[r.difficulty] ?? 1.0), 0);
         const recent = allRecent;
         const totalKills = recent.reduce((a, r) => a + r.kills, 0);
-        // Kill bonus: +1% per 2.5 kills, capped at +40%
-        const killMult = 1 + Math.min(totalKills / 100, 0.4);
+        // Kill bonus: +1% per kill, capped at +300% (×4.0 max)
+        const killMult = 1 + Math.min(totalKills / 100, 3);
         // Clean mission bonus: +3% for each winning mission with ≤10% death rate
         const cleanCount = winRecords.filter(r => r.deaths / Math.max(1, r.deployedCount) <= 0.1).length;
         const cleanBonus = 1 + cleanCount * 0.03;
         // Per-mission death penalty: exponent grows with death rate; stacks multiplicatively
+        // Only kicks in when death rate exceeds 40%
         const perMissionDeathMult = recent.reduce((acc, r) => {
           const dr = r.deaths / Math.max(1, r.deployedCount);
-          if (dr <= 0.1) return acc;
-          const exp = 1.2 + dr * 1.3; // 1.2 at 10% → 2.5 at 100%
-          return acc * Math.max(0.05, Math.pow(1 - dr, exp));
+          if (dr <= 0.4) return acc;
+          const exp = 1.2 + dr * 1.3; // 1.2 at 40% → 2.5 at 100%
+          return acc * Math.max(0.2, Math.pow(1 - dr, exp));
         }, 1.0);
-        const deathMult = Math.max(0.05, cleanBonus * perMissionDeathMult);
-        const finalMult = Math.min(Math.max(killMult * deathMult, 0.05), 3.0);
-        // basePay scales with difficulty-weighted win score instead of raw mission count
-        const basePay = Math.min(30 * tier * (1 + diffScore * 0.03) * (1 + fsi / 400), 500);
+        const deathMult = Math.max(0.2, cleanBonus * perMissionDeathMult);
+        const finalMult = Math.min(Math.max(killMult * deathMult, 0.2), 3.0);
+        // basePay: uncapped, scales with tier, difficulty score offset, and FSI
+        const basePay = 70 * tier * (1 + (diffScore - 20) * 0.03) * (1 + fsi / 100);
         const money = Math.floor(basePay * finalMult);
         const metal = Math.floor(basePay * 0.4 * finalMult);
         return { mbase: { ...s.mbase, money: s.mbase.money + money, metal: s.mbase.metal + metal } };
@@ -593,8 +688,11 @@ export const useGameStore = create<GameState>((set, get) => {
         buildings: s.buildings,
         inventory: s.inventory,
         freeRecruitCount: s.freeRecruitCount,
+        defaultTeamId: s.defaultTeamId,
         hqShopItems: s.hqShopItems ?? [],
         meridianStats: s.meridianStats,
+        missionsUntilNextWave: s.missionsUntilNextWave ?? 20,
+        // autoRecruit is intentionally omitted — it lives in a cookie, not the save file
       };
       return data;
     },
@@ -604,8 +702,57 @@ export const useGameStore = create<GameState>((set, get) => {
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     },
 
+    reviveHeroine: (maidenId) =>
+      set(s => {
+        const COST = 7;
+        // Count blooms in inventory (each entry may have quantity >= 1)
+        const totalBlooms = s.inventory
+          .filter(i => i.id === 'revenant_bloom')
+          .reduce((sum, i) => sum + (i.quantity ?? 1), 0);
+        if (totalBlooms < COST) return s;
+        // Deduct 7 blooms — consume entries greedily
+        let remaining = COST;
+        const newInventory = s.inventory
+          .map(i => {
+            if (i.id !== 'revenant_bloom' || remaining <= 0) return i;
+            const qty = i.quantity ?? 1;
+            if (qty <= remaining) { remaining -= qty; return null; }
+            const leftover = qty - remaining;
+            remaining = 0;
+            return { ...i, quantity: leftover };
+          })
+          .filter((i): i is NonNullable<typeof i> => i !== null);
+        // Revive the heroine at 30% max HP
+        const newMaidens = s.maidens.map(m => {
+          if (m.id !== maidenId || !m.isFallen) return m;
+          const reviveHp = Math.max(1, Math.round(m.maxHp * 0.30));
+          // Sanitise equipment — drop any item that lost its slot during combat
+          const cleanEquipment = m.equipment.filter(e => e && e.slot);
+          return { ...m, isFallen: false, currentHp: reviveHp, equipment: cleanEquipment };
+        });
+        return { inventory: newInventory, maidens: newMaidens };
+      }),
+
+    setAutoRecruit: (value) => { writeAutoRecruit(value); set({ autoRecruit: value }); },
+
+    decrementMissionsUntilWave: () =>
+      set(s => ({ missionsUntilNextWave: Math.max(0, (s.missionsUntilNextWave ?? 20) - 1) })),
+
+    completeLyssaWave: () => {
+      const s = get();
+      const { tier } = computeForceStrengthIndex(s.maidens);
+      const WAVE_N: Record<number, number> = { 1: 20, 2: 15, 3: 10, 4: 10, 5: 7, 6: 5 };
+      set({ missionsUntilNextWave: WAVE_N[tier] ?? 20 });
+    },
+
     resetSave: () => {
-      const fresh = { ...INITIAL_SAVE, savedAt: new Date().toISOString() };
+      const fresh = {
+        ...INITIAL_SAVE,
+        savedAt: new Date().toISOString(),
+        meridianStats: { recentMissions: [], totalMissionsDone: 0 },
+        missionsUntilNextWave: 20,
+      };
+      // Merge (not replace) so Zustand action functions are preserved
       set(fresh);
       localStorage.setItem(SAVE_KEY, JSON.stringify(fresh));
     },

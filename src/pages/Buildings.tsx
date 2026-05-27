@@ -1,4 +1,5 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useGameStore } from '../store/gameStore';
 import type { Equipment } from '../types/equipment';
 import equipmentData from '../data/equipment.json';
@@ -89,6 +90,7 @@ const CHAR_ICON: Record<string, string> = {
   field_hospital:   'nursei.png',
   training_grounds: 'traineri.png',
   factory:          'workeri.png',
+  rosarium_vocis:   'promoi.png',
 };
 const CHAR_FULL: Record<string, { file: string; label: string; quote: string }> = {
   radio_center:     { file: 'shop.png',       label: 'HQ Supply Officer',  quote: "...Whatever. Just pick something and get out.\nI didn't ask to be stationed here." },
@@ -98,6 +100,7 @@ const CHAR_FULL: Record<string, { file: string; label: string; quote: string }> 
   field_hospital:   { file: 'nurse.png',       label: 'Field Nurse',        quote: "Get some rest. You'll need it for the next one." },
   training_grounds: { file: 'trainer.png',     label: 'Drill Instructor',   quote: "Pain now means survival later. Keep pushing." },
   factory:          { file: 'worker.png',      label: 'Factory Worker',     quote: "Tell me what you need. I'll have it ready." },
+  rosarium_vocis:   { file: 'promo.png',       label: 'Recruitment Officer', quote: "Victory calls the willing. We just make sure they're ready when they arrive." },
 };
 
 function BuildingCard({ building, mbase, onUpgrade, onOpen }: any) {
@@ -176,6 +179,7 @@ function BuildingModal({ building, mbase, maidens, inventory, buildings, onUpgra
       {building.id === 'training_grounds' && <TrainingGroundsPanel building={building} maidens={maidens} buildings={buildings} onUpgrade={onUpgrade} mbase={mbase} />}
       {building.id === 'farm' && <FarmPanel building={building} mbase={mbase} onUpgrade={onUpgrade} />}
       {building.id === 'the_meridian' && <MeridianPanel building={building} />}
+      {building.id === 'rosarium_vocis' && <RosariumPanel building={building} mbase={mbase} onUpgrade={onUpgrade} />}
     </div>
   );
 }
@@ -294,69 +298,351 @@ function FieldHospitalPanel({ building, maidens, onUpgrade, mbase }: any) {
 
 // ── Panel: Factory ────────────────────────────────────────────────────────────
 
+const PIPELINE_OUTPUT: Record<number, { potionId: string; potionName: string; potions: number; rationId: string; rationName: string; rations: number; grenadeId: string; grenadeName: string; grenades: number }> = {
+  1: { potionId: 'healing_potion',   potionName: 'Healing Potion',    potions: 10,  rationId: 'field_rations',     rationName: 'Field Rations',     rations: 5,   grenadeId: 'frag_grenade',       grenadeName: 'Frag Grenade',       grenades: 5  },
+  2: { potionId: 'field_potion',     potionName: 'Field Potion',      potions: 20,  rationId: 'improved_rations',  rationName: 'Improved Rations',  rations: 10,  grenadeId: 'concussion_grenade', grenadeName: 'Concussion Grenade', grenades: 10 },
+  3: { potionId: 'field_potion',     potionName: 'Field Potion',      potions: 50,  rationId: 'improved_rations',  rationName: 'Improved Rations',  rations: 20,  grenadeId: 'concussion_grenade', grenadeName: 'Concussion Grenade', grenades: 20 },
+  4: { potionId: 'advanced_potion',  potionName: 'Advanced Potion',   potions: 50,  rationId: 'highgrade_rations', rationName: 'High-Grade Rations', rations: 50,  grenadeId: 'incendiary_grenade', grenadeName: 'Incendiary Grenade', grenades: 30 },
+  5: { potionId: 'advanced_potion',  potionName: 'Advanced Potion',   potions: 100, rationId: 'highgrade_rations', rationName: 'High-Grade Rations', rations: 100, grenadeId: 'incendiary_grenade', grenadeName: 'Incendiary Grenade', grenades: 60 },
+};
+
 function FactoryPanel({ building, mbase, onCraft, onUpgrade }: any) {
   const tier: number = building.currentLevel;
   const available = craftableItems.filter(e => (e.craftTier ?? 1) <= tier);
   const locked = craftableItems.filter(e => (e.craftTier ?? 1) > tier);
+  const [tab, setTab] = useState<'crafting' | 'pipelines'>('crafting');
+
+  const tabBtn = (t: 'crafting' | 'pipelines', label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{
+        padding: '5px 14px', fontSize: 12, borderRadius: 4,
+        border: '1px solid var(--color-border)',
+        background: tab === t ? 'var(--color-accent-dark)' : 'var(--color-surface)',
+        color: tab === t ? '#fff' : 'var(--color-text-muted)',
+        cursor: 'pointer', fontWeight: tab === t ? 700 : 400,
+      }}
+    >{label}</button>
+  );
+
+  const out = PIPELINE_OUTPUT[tier];
 
   return (
     <div style={{ display: 'flex', gap: 0, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
       <CharColumn buildingId="factory" />
       <div style={{ flex: 1, minWidth: 0, padding: 16 }}>
-      <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 0 }}>
-        Produce equipment using raw resources. Higher factory levels unlock better recipes.
-      </p>
-      <StatBox label="Factory Tier" value={`Tier ${tier} -- unlocks tier <=${tier} recipes`} />
-      <div style={{ marginTop: 14 }}>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Craftable ({available.length})</div>
-        {available.length === 0 && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No recipes available at this tier.</div>}
-        {available.map(eq => {
-          const cc = eq.craftCost!;
-          const canCraft = mbase.money >= cc.money && mbase.wood >= cc.wood && mbase.metal >= cc.metal;
-          return (
-            <div key={eq.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: 'var(--color-text)', fontWeight: 'bold' }}>{eq.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{eq.description}</div>
-                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
-                  Cost: 💰{cc.money} 🪵{cc.wood} ⚙️{cc.metal}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {tabBtn('crafting', '🔧 Crafting')}
+          {tabBtn('pipelines', '🏭 Pipelines')}
+        </div>
+
+        {tab === 'crafting' && (
+          <>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 0 }}>
+              Produce equipment using raw resources. Higher factory levels unlock better recipes.
+            </p>
+            <StatBox label="Factory Tier" value={`Tier ${tier} -- unlocks tier <=${tier} recipes`} />
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Craftable ({available.length})</div>
+              {available.length === 0 && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No recipes available at this tier.</div>}
+              {available.map(eq => {
+                const cc = eq.craftCost!;
+                const canCraft = mbase.money >= cc.money && mbase.wood >= cc.wood && mbase.metal >= cc.metal;
+                return (
+                  <div key={eq.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: 'var(--color-text)', fontWeight: 'bold' }}>{eq.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{eq.description}</div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                        Cost: 💰{cc.money} 🪵{cc.wood} ⚙️{cc.metal}
+                      </div>
+                      {eq.damage !== undefined && <span style={{ fontSize: 10, color: '#e8a85a', marginRight: 6 }}>DMG {eq.damage}</span>}
+                      {eq.bonuses.map((b: any, i: number) => (
+                        <span key={i} style={{ fontSize: 10, color: b.value >= 0 ? '#6ab06a' : '#c06060', marginRight: 4 }}>
+                          {b.label}: {b.value > 0 ? '+' : ''}{b.value}{b.isPercent ? '%' : ''}
+                        </span>
+                      ))}
+                    </div>
+                    <button onClick={() => onCraft(eq.id)} disabled={!canCraft} style={{ padding: '6px 12px', background: canCraft ? 'var(--color-accent-dark)' : '#555', color: '#fff', border: 'none', borderRadius: 4, cursor: canCraft ? 'pointer' : 'not-allowed', fontSize: 12, flexShrink: 0 }}>
+                      Craft
+                    </button>
+                  </div>
+                );
+              })}
+              {locked.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Locked ({locked.length})</div>
+                  {locked.map(eq => (
+                    <div key={eq.id} style={{ fontSize: 12, color: '#555', padding: '4px 0', borderBottom: '1px solid #1a1a1a' }}>
+                      🔒 {eq.name}  ERequires Factory Tier {eq.craftTier}
+                    </div>
+                  ))}
                 </div>
-                {eq.damage !== undefined && <span style={{ fontSize: 10, color: '#e8a85a', marginRight: 6 }}>DMG {eq.damage}</span>}
-                {eq.bonuses.map((b: any, i: number) => (
-                  <span key={i} style={{ fontSize: 10, color: b.value >= 0 ? '#6ab06a' : '#c06060', marginRight: 4 }}>
-                    {b.label}: {b.value > 0 ? '+' : ''}{b.value}{b.isPercent ? '%' : ''}
-                  </span>
-                ))}
-              </div>
-              <button onClick={() => onCraft(eq.id)} disabled={!canCraft} style={{ padding: '6px 12px', background: canCraft ? 'var(--color-accent-dark)' : '#555', color: '#fff', border: 'none', borderRadius: 4, cursor: canCraft ? 'pointer' : 'not-allowed', fontSize: 12, flexShrink: 0 }}>
-                Craft
-              </button>
+              )}
             </div>
-          );
-        })}
-        {locked.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: '#666', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Locked ({locked.length})</div>
-            {locked.map(eq => (
-              <div key={eq.id} style={{ fontSize: 12, color: '#555', padding: '4px 0', borderBottom: '1px solid #1a1a1a' }}>
-                🔒 {eq.name}  ERequires Factory Tier {eq.craftTier}
-              </div>
-            ))}
-          </div>
+          </>
         )}
+
+        {tab === 'pipelines' && (
+          <>
+            <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 0 }}>
+              After every concluded mission — win or lose — the factory automatically produces a batch of consumables added directly to the base inventory.
+            </p>
+            {out && (
+              <StatBox
+                label={`Current Output (Tier ${tier})`}
+                value={`🧪 ${out.potions}× ${out.potionName} · 🥫 ${out.rations}× ${out.rationName} · 💣 ${out.grenades}× ${out.grenadeName}`}
+              />
+            )}
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Output per Mission by Tier</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>Tier</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>🧪 Potion</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>🥫 Rations</th>
+                    <th style={{ textAlign: 'left', padding: '4px 8px' }}>💣 Grenade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[1, 2, 3, 4, 5].map(lv => {
+                    const lvOut = PIPELINE_OUTPUT[lv];
+                    const isCurrent = lv === tier;
+                    return (
+                      <tr
+                        key={lv}
+                        style={{
+                          background: isCurrent ? 'rgba(200,149,74,0.08)' : 'transparent',
+                          borderBottom: '1px solid var(--color-border)',
+                          color: lv > tier ? '#555' : 'var(--color-text)',
+                        }}
+                      >
+                        <td style={{ padding: '6px 8px', fontWeight: isCurrent ? 700 : 400 }}>
+                          {isCurrent ? '▶ ' : lv > tier ? '🔒 ' : ''} Lv {lv}
+                        </td>
+                        <td style={{ padding: '6px 8px' }}>{lvOut.potions}× {lvOut.potionName}</td>
+                        <td style={{ padding: '6px 8px' }}>{lvOut.rations}× {lvOut.rationName}</td>
+                        <td style={{ padding: '6px 8px' }}>{lvOut.grenades}× {lvOut.grenadeName}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ marginTop: 12, fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+                💡 Higher factory tiers produce <strong>rarer and more effective</strong> consumables — Lv 1 outputs basic Healing Potions / Field Rations / Frag Grenades; Lv 2–3 upgrades to Field Potions / Improved Rations / Concussion Grenades; Lv 4–5 delivers Advanced Potions / High-Grade Rations / Incendiary Grenades. Production occurs regardless of mission outcome — every deployment counts.
+              </div>
+            </div>
+          </>
+        )}
+
+        <UpgradeStrip building={building} mbase={mbase} onUpgrade={onUpgrade} />
       </div>
-      <UpgradeStrip building={building} mbase={mbase} onUpgrade={onUpgrade} />
+    </div>
+  );
+}
+
+// ── Sell Equipment Tab ────────────────────────────────────────────────────────
+
+interface SellGroup {
+  name: string;
+  slot: string;
+  rarityValue: number;
+  unitPrice: number;       // sell price per unit (50% of market)
+  ids: string[];           // inventoryId of each instance
+  allLocked: boolean;
+  someLocked: boolean;
+}
+
+function SellEquipmentTab({ inventory, onSell, onToggleLock }: { inventory: Equipment[]; onSell: (id: string) => void; onToggleLock: (id: string) => void }) {
+  const [pendingGroup, setPendingGroup] = useState<SellGroup | null>(null);
+  const [qty, setQty] = useState(1);
+
+  // Build stacked groups: group by name+slot+rarity
+  const groups: SellGroup[] = [];
+  const keyIdx = new Map<string, number>();
+  for (const eq of inventory) {
+    const rv = (eq as any).rarityValue ?? (eq.isRare ? 3 : 1);
+    const key = `${eq.name}||${eq.slot}||${rv}`;
+    const id = eq.inventoryId ?? eq.id;
+    const locked = !!eq.isLocked;
+    const existing = keyIdx.get(key);
+    if (existing !== undefined) {
+      groups[existing].ids.push(id);
+      if (!locked) groups[existing].allLocked = false;
+      if (locked) groups[existing].someLocked = true;
+    } else {
+      keyIdx.set(key, groups.length);
+      groups.push({
+        name: eq.name, slot: eq.slot, rarityValue: rv,
+        unitPrice: Math.floor((eq.price ?? 0) * 0.5),
+        ids: [id],
+        allLocked: locked,
+        someLocked: locked,
+      });
+    }
+  }
+
+  function openSell(g: SellGroup) {
+    const unlocked = g.ids.filter(id => !inventory.find(eq => (eq.inventoryId ?? eq.id) === id)?.isLocked);
+    if (unlocked.length === 0) return;
+    setPendingGroup(g);
+    setQty(1);
+  }
+
+  function confirmSell() {
+    if (!pendingGroup) return;
+    const unlocked = pendingGroup.ids.filter(id => !inventory.find(eq => (eq.inventoryId ?? eq.id) === id)?.isLocked);
+    const toSell = unlocked.slice(0, qty);
+    toSell.forEach(id => onSell(id));
+    setPendingGroup(null);
+  }
+
+  return (
+    <div>
+      {/* Quantity sell dialog */}
+      {pendingGroup && (() => {
+        const unlocked = pendingGroup.ids.filter(id => !inventory.find(eq => (eq.inventoryId ?? eq.id) === id)?.isLocked);
+        const maxQty = unlocked.length;
+        const safeQty = Math.min(qty, maxQty);
+        const totalGold = safeQty * pendingGroup.unitPrice;
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)' }}>
+            <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 24, width: 300, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+                Sell <span style={{ color: ['', 'var(--color-text)', '#6db86d', '#4a9eff', '#a06fd8', '#e08080'][pendingGroup.rarityValue] }}>{pendingGroup.name}</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+                {pendingGroup.unitPrice} 💰 each &nbsp;·&nbsp; {maxQty} available
+              </div>
+
+              {/* Quantity picker */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', width: 52 }}>Quantity</span>
+                <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ padding: '3px 10px', fontSize: 13, background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 4, cursor: 'pointer' }}>−</button>
+                <input
+                  type="number" min={1} max={maxQty} value={safeQty}
+                  onChange={e => setQty(Math.max(1, Math.min(maxQty, parseInt(e.target.value) || 1)))}
+                  style={{ width: 52, textAlign: 'center', background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 4, padding: '4px 6px', fontSize: 13 }}
+                />
+                <button onClick={() => setQty(q => Math.min(maxQty, q + 1))} style={{ padding: '3px 10px', fontSize: 13, background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 4, cursor: 'pointer' }}>+</button>
+                <button onClick={() => setQty(maxQty)} style={{ padding: '3px 8px', fontSize: 11, background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', borderRadius: 4, cursor: 'pointer' }}>All</button>
+              </div>
+
+              {/* Expected payout */}
+              <div style={{ padding: '8px 12px', background: '#0e0d0b', border: '1px solid var(--color-border)', borderRadius: 6, marginBottom: 18 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  You will receive: <strong style={{ color: '#6ab06a', fontSize: 14 }}>{totalGold} 💰</strong>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 3 }}>
+                  {safeQty} × {pendingGroup.unitPrice} 💰
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setPendingGroup(null)} style={{ flex: 1, padding: '7px', background: 'transparent', border: '1px solid var(--color-border)', color: 'var(--color-text-muted)', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+                <button onClick={confirmSell} style={{ flex: 1, padding: '7px', background: 'var(--color-accent-dark)', border: 'none', color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
+                  Sell {safeQty > 1 ? `×${safeQty}` : ''}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 10 }}>
+        Sell equipment from your inventory at 50% of market price. 🔒 Locked items cannot be sold.
       </div>
+
+      {groups.length === 0 && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Your inventory is empty.</div>}
+
+      {groups.map((g, gi) => {
+        const count = g.ids.length;
+        const unlocked = g.ids.filter(id => !inventory.find(eq => (eq.inventoryId ?? eq.id) === id)?.isLocked);
+        const canSell = unlocked.length > 0;
+        // representative item for toggle lock (use first id)
+        const repId = g.ids[0];
+        const repItem = inventory.find(eq => (eq.inventoryId ?? eq.id) === repId);
+        const repLocked = !!repItem?.isLocked;
+        return (
+          <div key={gi} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--color-border)', opacity: g.allLocked ? 0.6 : 1 }}>
+            {/* Lock toggle on representative */}
+            <button
+              onClick={() => onToggleLock(repId)}
+              title={repLocked ? 'Unlock item (allow selling)' : 'Lock item (prevent selling)'}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: '0 2px', lineHeight: 1, color: repLocked ? '#e8a85a' : '#555', flexShrink: 0 }}
+            >
+              {repLocked ? '🔒' : '🔓'}
+            </button>
+
+            {/* Name + slot + count badge */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13, color: ['', 'var(--color-text)', '#6db86d', '#4a9eff', '#a06fd8', '#e08080'][g.rarityValue], fontWeight: g.rarityValue >= 3 ? 'bold' : 'normal', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {g.name}
+                </span>
+                {count > 1 && (
+                  <span style={{ fontSize: 11, background: 'rgba(200,149,74,0.2)', color: 'var(--color-accent)', border: '1px solid rgba(200,149,74,0.4)', borderRadius: 3, padding: '1px 6px', fontWeight: 700, flexShrink: 0 }}>
+                    ×{count}
+                  </span>
+                )}
+                {g.someLocked && !g.allLocked && (
+                  <span style={{ fontSize: 10, color: '#888' }}>({g.ids.length - unlocked.length} locked)</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 1 }}>{g.slot}</div>
+            </div>
+
+            {/* Price */}
+            <div style={{ fontSize: 12, color: canSell ? '#6ab06a' : 'var(--color-text-muted)', marginRight: 4, flexShrink: 0 }}>
+              {g.unitPrice} 💰{count > 1 ? ` ea` : ''}
+            </div>
+
+            {/* Sell button — styled like HQ buy button */}
+            <button
+              onClick={() => canSell && openSell(g)}
+              disabled={!canSell}
+              title={!canSell ? 'Unlock this item first to sell it' : `Sell ${g.name}`}
+              style={{
+                padding: '6px 12px',
+                background: canSell ? 'var(--color-accent-dark)' : '#555',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 4,
+                cursor: canSell ? 'pointer' : 'not-allowed',
+                fontSize: 12,
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              {canSell ? 'Sell' : '🔒'}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 // ── Panel: Radio Center ───────────────────────────────────────────────────────
 
+/** Maps rarityValue 1-5 → display meta */
+const RARITY_META: Record<number, { label: string; color: string; glow: string }> = {
+  1: { label: 'Common',    color: '#aaaaaa', glow: 'none' },
+  2: { label: 'Uncommon',  color: '#5aac44', glow: 'none' },
+  3: { label: 'Rare',      color: '#4a90d9', glow: '0 0 6px rgba(74,144,217,0.3)' },
+  4: { label: 'Very Rare', color: '#c84ad9', glow: '0 0 8px rgba(200,74,217,0.3)' },
+  5: { label: 'Legendary', color: '#e8a840', glow: '0 0 10px rgba(232,168,64,0.4)' },
+};
+/** Max rarity unlocked at a given Radio Center level */
+const maxRarityForLevel = (lv: number) => Math.ceil(lv / 2);
+
 const TIER_LABEL: Record<number, string> = {
-  1: 'Standard Field Gear', 2: 'Improved Issue', 3: 'Professional Grade',
-  4: 'Specialist Gear', 5: 'Heavy Field Equipment', 6: 'Elite Assault Gear',
-  7: 'Advanced Tactical', 8: 'Rare HQ Supply', 9: 'Legendary Gear', 10: 'Epic — Game-changing',
+  1: 'Common Gear (Lv 1–2)', 2: 'Common Gear (Lv 1–2)',
+  3: 'Uncommon Gear (Lv 3–4)', 4: 'Uncommon Gear (Lv 3–4)',
+  5: 'Rare Gear (Lv 5–6)', 6: 'Rare Gear (Lv 5–6)',
+  7: 'Very Rare Gear (Lv 7–8)', 8: 'Very Rare Gear (Lv 7–8)',
+  9: 'Legendary Gear (Lv 9–10)', 10: 'Legendary Gear (Lv 9–10)',
 };
 
 const tradeBtn: React.CSSProperties = {
@@ -462,7 +748,7 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, gap: 8 }}>
                 <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  <span style={{ color: 'var(--color-accent)', fontWeight: 'bold' }}>Tier {tier}</span>
+                  <span style={{ color: RARITY_META[maxRarityForLevel(tier)].color, fontWeight: 'bold' }}>Lv {tier}</span>
                   {' — '}{TIER_LABEL[tier] ?? 'HQ Supply'}
                   {' · '}{shopItems.length}/3 in stock
                 </div>
@@ -475,22 +761,37 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
                   New Stock (gold: {refreshCost})
                 </button>
               </div>
+              {/* Rarity legend + next-tier unlock info */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {([1,2,3,4,5] as const).map(rv => {
+                  const meta = RARITY_META[rv];
+                  const unlocked = maxRarityForLevel(tier) >= rv;
+                  return (
+                    <span key={rv} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 3, border: `1px solid ${unlocked ? meta.color : '#444'}`, color: unlocked ? meta.color : '#555', background: unlocked ? 'rgba(0,0,0,0.3)' : 'transparent', fontWeight: unlocked ? 'bold' : 'normal' }}>
+                      {meta.label}
+                    </span>
+                  );
+                })}
+              </div>
               {shopItems.length === 0 && (
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '16px 0', textAlign: 'center' }}>
                   All items sold. Request new stock from HQ.
                 </div>
               )}
               {shopItems.map(eq => {
+                const rv = (eq as any).rarityValue as number | undefined;
+                const rarMeta = RARITY_META[rv ?? 1];
                 const canBuy = mbase.money >= (eq.price ?? 0)
                   && mbase.wood   >= (eq.hqExtraCost?.wood  ?? 0)
                   && mbase.metal  >= (eq.hqExtraCost?.metal ?? 0);
                 return (
-                  <div key={eq.id} style={{ padding: 10, marginBottom: 8, background: '#0e0d0b', border: `1px solid ${eq.isRare ? '#c84a4a' : 'var(--color-border)'}`, borderRadius: 6, boxShadow: eq.isRare ? '0 0 8px rgba(200,74,74,0.15)' : 'none' }}>
+                  <div key={eq.id} style={{ padding: 10, marginBottom: 8, background: '#0e0d0b', border: `1px solid ${rarMeta.color}`, borderRadius: 6, boxShadow: rarMeta.glow }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, color: eq.isRare ? '#e88' : 'var(--color-text)', fontWeight: 'bold' }}>
-                          {eq.isRare ? '* ' : ''}{eq.name}
-                          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 'normal', marginLeft: 6, textTransform: 'capitalize' }}>{eq.slot}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <span style={{ fontSize: 10, padding: '1px 5px', borderRadius: 3, border: `1px solid ${rarMeta.color}`, color: rarMeta.color, fontWeight: 'bold', flexShrink: 0 }}>{rarMeta.label}</span>
+                          <span style={{ fontSize: 13, color: rarMeta.color, fontWeight: 'bold' }}>{eq.name}</span>
+                          <span style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 'normal', textTransform: 'capitalize' }}>{eq.slot}</span>
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{eq.description}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
@@ -509,7 +810,7 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
                           {eq.hqExtraCost?.metal ? ` + Metal: ${eq.hqExtraCost.metal}` : ''}
                         </div>
                       </div>
-                      <button onClick={() => onBuyHQ(eq.id)} disabled={!canBuy} style={{ padding: '6px 12px', background: canBuy ? (eq.isRare ? '#c84a4a' : 'var(--color-accent-dark)') : '#555', color: '#fff', border: 'none', borderRadius: 4, cursor: canBuy ? 'pointer' : 'not-allowed', fontSize: 12, flexShrink: 0 }}>
+                      <button onClick={() => onBuyHQ(eq.id)} disabled={!canBuy} style={{ padding: '6px 12px', background: canBuy ? rarMeta.color : '#555', color: '#fff', border: 'none', borderRadius: 4, cursor: canBuy ? 'pointer' : 'not-allowed', fontSize: 12, flexShrink: 0 }}>
                         Buy
                       </button>
                     </div>
@@ -529,15 +830,15 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
               {/* Food row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <span style={{ fontSize: 13, color: 'var(--color-text)', width: 60 }}>🍖 Food</span>
-                <button onClick={() => setTradeFood(Math.max(0, tradeFood - 10))} style={tradeBtn}>−10</button>
-                <button onClick={() => setTradeFood(Math.max(0, tradeFood - 1))}  style={tradeBtn}>−1</button>
+                <button onClick={() => setTradeFood(Math.max(0, tradeFood - 100))} style={tradeBtn}>−100</button>
+                <button onClick={() => setTradeFood(Math.max(0, tradeFood - 10))}  style={tradeBtn}>−10</button>
                 <input
                   type="number" min={0} value={tradeFood}
                   onChange={e => setTradeFood(Math.max(0, parseInt(e.target.value) || 0))}
                   style={{ width: 64, textAlign: 'center', background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 4, padding: '4px 6px', fontSize: 13 }}
                 />
-                <button onClick={() => setTradeFood(tradeFood + 1)}  style={tradeBtn}>+1</button>
-                <button onClick={() => setTradeFood(tradeFood + 10)} style={tradeBtn}>+10</button>
+                <button onClick={() => setTradeFood(tradeFood + 10)}  style={tradeBtn}>+10</button>
+                <button onClick={() => setTradeFood(tradeFood + 100)} style={tradeBtn}>+100</button>
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
                   = {tradeFood * TRADE_RATE} 💰
                 </span>
@@ -546,15 +847,15 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
               {/* Wood row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
                 <span style={{ fontSize: 13, color: 'var(--color-text)', width: 60 }}>🪵 Wood</span>
-                <button onClick={() => setTradeWood(Math.max(0, tradeWood - 10))} style={tradeBtn}>−10</button>
-                <button onClick={() => setTradeWood(Math.max(0, tradeWood - 1))}  style={tradeBtn}>−1</button>
+                <button onClick={() => setTradeWood(Math.max(0, tradeWood - 100))} style={tradeBtn}>−100</button>
+                <button onClick={() => setTradeWood(Math.max(0, tradeWood - 10))}  style={tradeBtn}>−10</button>
                 <input
                   type="number" min={0} value={tradeWood}
                   onChange={e => setTradeWood(Math.max(0, parseInt(e.target.value) || 0))}
                   style={{ width: 64, textAlign: 'center', background: '#0e0d0b', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 4, padding: '4px 6px', fontSize: 13 }}
                 />
-                <button onClick={() => setTradeWood(tradeWood + 1)}  style={tradeBtn}>+1</button>
-                <button onClick={() => setTradeWood(tradeWood + 10)} style={tradeBtn}>+10</button>
+                <button onClick={() => setTradeWood(tradeWood + 10)}  style={tradeBtn}>+10</button>
+                <button onClick={() => setTradeWood(tradeWood + 100)} style={tradeBtn}>+100</button>
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 4 }}>
                   = {tradeWood * TRADE_RATE} 💰
                 </span>
@@ -586,42 +887,7 @@ function RadioCenterPanel({ building, mbase, inventory, onBuyHQ, onSell, onToggl
           )}
 
           {tab === 'sell' && (
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 10 }}>
-                Sell equipment from your inventory at 50% of market price. 🔒 Locked items cannot be sold.
-              </div>
-              {inventory.length === 0 && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Your inventory is empty.</div>}
-              {inventory.map((eq: Equipment) => {
-                const sellPrice = Math.floor((eq.price ?? 0) * 0.5);
-                const locked = !!eq.isLocked;
-                return (
-                  <div key={eq.inventoryId ?? eq.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--color-border)', opacity: locked ? 0.7 : 1 }}>
-                    <button
-                      onClick={() => onToggleLock(eq.inventoryId ?? eq.id)}
-                      title={locked ? 'Unlock item (allow selling)' : 'Lock item (prevent selling)'}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, padding: '0 2px', lineHeight: 1, color: locked ? '#e8a85a' : '#555', flexShrink: 0 }}
-                    >
-                      {locked ? '🔒' : '🔓'}
-                    </button>
-                    <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: eq.isRare ? '#e88' : 'var(--color-text)', fontWeight: eq.isRare ? 'bold' : 'normal' }}>
-                        {eq.isRare ? '* ' : ''}{eq.name}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'var(--color-text-muted)', marginLeft: 8 }}>{eq.slot}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: locked ? 'var(--color-text-muted)' : '#6ab06a', marginRight: 8 }}>Gold: {sellPrice}</div>
-                    <button
-                      onClick={() => !locked && onSell(eq.inventoryId ?? eq.id)}
-                      disabled={locked}
-                      title={locked ? 'Unlock this item first to sell it' : undefined}
-                      style={{ padding: '4px 10px', background: locked ? '#222' : '#3a3328', color: locked ? '#555' : 'var(--color-text-muted)', border: `1px solid ${locked ? '#333' : 'var(--color-border)'}`, borderRadius: 4, cursor: locked ? 'not-allowed' : 'pointer', fontSize: 11 }}
-                    >
-                      {locked ? '🔒' : 'Sell'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+            <SellEquipmentTab inventory={inventory} onSell={onSell} onToggleLock={onToggleLock} />
           )}
 
           <UpgradeStrip building={building} mbase={mbase} onUpgrade={onUpgrade} />
@@ -693,7 +959,7 @@ function TrainingGroundsPanel({ building, maidens, onUpgrade, mbase }: any) {
 function FarmPanel({ building, mbase, onUpgrade }: any) {
   const currentLvDef = building.levels[building.currentLevel - 1];
   const foodPerMission: number = currentLvDef?.effectValue?.food ?? 0;
-  const FOOD_BY_LEVEL = [150, 200, 300, 400];
+  const FOOD_BY_LEVEL = [200, 300, 400, 500, 600, 700];
   return (
     <div style={{ display: 'flex', gap: 0, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
       <CharColumn buildingId="farm" />
@@ -708,7 +974,7 @@ function FarmPanel({ building, mbase, onUpgrade }: any) {
       </div>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Yield by Level</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
           {FOOD_BY_LEVEL.map((food, i) => (
             <div key={i} style={{
               padding: '6px 8px', borderRadius: 4, textAlign: 'center',
@@ -730,24 +996,32 @@ function FarmPanel({ building, mbase, onUpgrade }: any) {
 // ── Panel: The Meridian ───────────────────────────────────────────────────────
 
 function MeridianTooltip({ children, lines }: { children: React.ReactNode; lines: React.ReactNode[] }) {
-  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  function toFixed(e: React.MouseEvent) {
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1;
+    setPos({ x: e.clientX / zoom, y: e.clientY / zoom });
+  }
   return (
     <div
-      style={{ position: 'relative', cursor: 'help' }}
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
+      style={{ position: 'relative', cursor: 'help', display: 'inline-block' }}
+      onMouseEnter={toFixed}
+      onMouseMove={toFixed}
+      onMouseLeave={() => setPos(null)}
     >
       {children}
-      {show && (
+      {pos && ReactDOM.createPortal(
         <div style={{
-          position: 'absolute', bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed',
+          left: pos.x + 14,
+          top: pos.y + 14,
           background: '#1c1a14', border: '1px solid var(--color-accent-dark)', borderRadius: 6,
           padding: '10px 13px', fontSize: 11, color: 'var(--color-text)',
-          zIndex: 2000, width: 270, boxShadow: '0 6px 24px rgba(0,0,0,0.9)',
+          zIndex: 99999, width: 270, boxShadow: '0 6px 24px rgba(0,0,0,0.9)',
           pointerEvents: 'none', whiteSpace: 'normal', lineHeight: 1.65, textAlign: 'left',
         }}>
           {lines.map((l, i) => <div key={i}>{l}</div>)}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -846,7 +1120,7 @@ function MeridianPanel({ building }: any) {
   const { fsi, tierLabel } = computeForceStrengthIndex(maidens);
   const allRecent = (meridianStats?.recentMissions ?? []).slice(-10);
   const winRecords = allRecent.filter((r: any) => r.isWin);
-  const diffWeight: Record<string, number> = { easy: 0.6, normal: 1.0, hard: 1.5, extreme: 2.2 };
+  const diffWeight: Record<string, number> = { easy: 1, normal: 2, hard: 10, extreme: 40 };
   const diffScore = winRecords.reduce((a: number, r: any) => a + (diffWeight[r.difficulty] ?? 1.0), 0);
   const recent = allRecent;
   const totalKills = recent.reduce((a: number, r: any) => a + r.kills, 0);
@@ -858,7 +1132,7 @@ function MeridianPanel({ building }: any) {
     : 0;
 
   // Kill multiplier
-  const killMult = 1 + Math.min(totalKills / 100, 0.4);
+  const killMult = 1 + Math.min(totalKills / 100, 3);
 
   // Clean mission bonus (wins only)
   const cleanCount = winRecords.filter((r: any) => r.deaths / Math.max(1, r.deployedCount) <= 0.1).length;
@@ -867,14 +1141,14 @@ function MeridianPanel({ building }: any) {
   // Per-mission death penalty (multiplicative stack, all recent)
   const perMissionDeathMult = recent.reduce((acc: number, r: any) => {
     const dr = r.deaths / Math.max(1, r.deployedCount);
-    if (dr <= 0.1) return acc;
+    if (dr <= 0.4) return acc;
     const exp = 1.2 + dr * 1.3;
-    return acc * Math.max(0.05, Math.pow(1 - dr, exp));
+    return acc * Math.max(0.2, Math.pow(1 - dr, exp));
   }, 1.0);
-  const deathMult = Math.max(0.05, cleanBonus * perMissionDeathMult);
-  const finalMult = Math.min(Math.max(killMult * deathMult, 0.05), 3.0);
-  const rawBase = 30 * tier * (1 + diffScore * 0.03) * (1 + fsi / 400);
-  const basePay = Math.min(rawBase, 500);
+  const deathMult = Math.max(0.2, cleanBonus * perMissionDeathMult);
+  const finalMult = Math.min(Math.max(killMult * deathMult, 0.2), 3.0);
+  const rawBase = 70 * tier * (1 + (diffScore - 20) * 0.03) * (1 + fsi / 100);
+  const basePay = rawBase;
   const estMoney = Math.floor(basePay * finalMult);
   const estMetal = Math.floor(basePay * 0.4 * finalMult);
 
@@ -921,8 +1195,13 @@ function MeridianPanel({ building }: any) {
           <MeridianTooltip lines={[
             <>{hi('Kill Bonus')}</>,
             sep,
-            <>{dim('Formula: ')}+1% per 2.5 kills, cap +40%</>,
-            <>{dim('= 1 + min(kills/100, 0.40)')}</>,
+            <>{dim('Formula: ')}+1% per kill, capped at +300% (×4.0 max)</>,
+            <>{dim('= 1 + min(kills/100, 3.0)')}</>,
+            <>{dim('(300 kills needed for full +300% bonus)')}</>,
+            <>{dim('Overrides finalMult cap: killMult itself can reach ×4.0')}</>,
+            sep,
+            <>{dim('Note: finalMult still clamped ×0.2 – ×3.0 after deathMult')}</>,
+            sep,
             sep,
             <>Total kills (recent 10): {hi(String(totalKills))}</>,
             <>Kill multiplier: {hi(`×${killMult.toFixed(3)}`)}</>,
@@ -960,8 +1239,13 @@ function MeridianPanel({ building }: any) {
             <>{dim('Clean missions (≤10% loss): ')}{good(`+${cleanCount} × 3% bonus`)}</>,
             <>{dim('Clean bonus: ')}{good(`×${cleanBonus.toFixed(3)}`)}</>,
             sep,
-            <>{dim('Each high-loss mission stacks:')}</>,
-            <>{dim('factor = (1 − dr)^(1.2 + dr×1.3)')}</>,
+            <>{dim('Penalty missions (>40% loss) stack:')}</>,
+            <>{dim('factor = max(0.2, (1 − dr)^(1.2 + dr×1.3))')}</>,
+            <>{dim('floor per penalty mission: ×0.2')}</>,
+            <>{dim('deathMult floor: ×0.2')}</>,
+            sep,
+            <>{dim('→ Death penalty does NOT apply below 40% loss.')}</>,
+            sep,
             sep,
             ...missionPenaltyRows.filter(r => r.factor !== null).map(r =>
               <>{dim(`M${r.i + 1}: ${(r.dr * 100).toFixed(0)}% loss → `)}{bad(r.label!)}</>
@@ -985,7 +1269,9 @@ function MeridianPanel({ building }: any) {
             <>{hi('CPI Final Multiplier')}</>,
             sep,
             <>{dim('finalMult = killMult × deathMult')}</>,
-            <>{dim('Clamped to [0.05× – 3.0×]')}</>,
+            <>{dim('Clamped to [0.2× – 3.0×]')}</>,
+            <>{dim('(deathMult floor ×0.2; finalMult floor ×0.2)')}</>,
+            sep,
             sep,
             <>Kill mult: {hi(`×${killMult.toFixed(3)}`)}</>,
             <>Death mult: {deathMult < 0.5 ? bad(`×${deathMult.toFixed(3)}`) : good(`×${deathMult.toFixed(3)}`)}</>,
@@ -1003,12 +1289,18 @@ function MeridianPanel({ building }: any) {
           <MeridianTooltip lines={[
             <>{hi('Estimated Gold')}</>,
             sep,
-            <>{dim('basePay = min(30 × tier × (1 + diffScore×0.03) × (1 + FSI/400), 500)')}</>,
+            <>{dim('basePay = 70 × tier × (1 + (diffScore−20)×0.03) × (1 + FSI/100)')}</>,
+            <>{dim('Uncapped. diffScore offset: −20 baseline (scores below 20 reduce base)')}</>,
             sep,
             <>tier: {hi(String(tier))}</>,
-            <>difficulty score: {hi(diffScore.toFixed(1))} pts (wins only; easy×0.6 / normal×1.0 / hard×1.5 / extreme×2.2)</>,
+            <>difficulty score: {hi(diffScore.toFixed(1))} pts (wins only; easy×1 / normal×2 / hard×10 / extreme×40)</>,
+            <>score offset: {diffScore >= 20 ? good(`+${((diffScore - 20) * 0.03 * 100).toFixed(1)}%`) : bad(`${((diffScore - 20) * 0.03 * 100).toFixed(1)}%`)}</>,
+            <>FSI bonus: {hi(`+${(fsi / 100 * 100).toFixed(0)}%`)}</>,
             <>FSI: {hi(String(fsi))}</>,
-            <>raw base: {hi(rawBase.toFixed(1))} → capped: {hi(String(basePay))}</>,
+            <>base pay: {hi(rawBase.toFixed(1))}</>,
+            sep,
+            <>FSI: {hi(String(fsi))}</>,
+            <>base pay: {hi(rawBase.toFixed(1))}</>,
             sep,
             <>Gold = floor({hi(String(basePay))} × {hi(`×${finalMult.toFixed(3)}`)}) = {hi(`+${estMoney}`)}</>,
           ]}>
@@ -1051,8 +1343,8 @@ function MeridianPanel({ building }: any) {
               const dr = r.deaths / Math.max(1, r.deployedCount);
               const isWipe = dr >= 1.0;
               const isClean = dr <= 0.1;
-              const exp = dr > 0.1 ? (1.2 + dr * 1.3) : 0;
-              const penaltyFactor = dr > 0.1 ? Math.max(0.05, Math.pow(1 - dr, exp)) : null;
+              const exp = dr > 0.4 ? (1.2 + dr * 1.3) : 0;
+              const penaltyFactor = dr > 0.4 ? Math.max(0.2, Math.pow(1 - dr, exp)) : null;
               return (
                 <div key={i} style={{
                   display: 'grid', gridTemplateColumns: '0.8fr 1fr 1fr 1fr 1fr', gap: 6,
@@ -1077,7 +1369,7 @@ function MeridianPanel({ building }: any) {
 
       {/* Formula note */}
       <div style={{ fontSize: 10, color: '#555', padding: '8px 10px', background: '#0a0a08', borderRadius: 4, border: '1px solid #1a1a14' }}>
-        <strong style={{ color: '#666' }}>Formula:</strong> basePay (max 500) × killMult (kills/100, max +40%) × deathMult (cleanBonus + stacked per-mission penalties). High-loss missions stack exponentially — a 100% wipe nearly eliminates support for that evaluation window. Hover any stat for details.
+        <strong style={{ color: '#666' }}>Formula:</strong> basePay (70 × tier × (diffScore−20 bonus) × FSI/100 bonus, uncapped) × killMult (kills/100, max +300%; ×4.0 at 300 kills) × deathMult (cleanBonus × per-mission penalties). Death penalty only applies to missions with &gt;40% losses (floor ×0.2 per mission; deathMult &amp; finalMult both floored at ×0.2). Hover any stat for details.
       </div>
       </div>
     </div>
@@ -1109,6 +1401,71 @@ function ExpRow({ label, exp }: { label: string; exp: { theoryExp: number; pract
   );
 }
 
+// ── Panel: Rosarium Vocis ─────────────────────────────────────────────────────
 
+const GEAR_RARITY_LABELS: Record<number, string> = {
+  1: 'Standard (R1)',
+  2: 'Uncommon (R2)',
+  3: 'Rare (R3)',
+  4: 'Very Rare (R4) / Legendary (R5) for heroines',
+  5: 'Legendary (R5)',
+};
 
+function RosariumPanel({ building, mbase, onUpgrade }: any) {
+  const { freeRecruitCount } = useGameStore();
+  const lvDef = building.levels[building.currentLevel - 1];
+  const chance: number = lvDef?.effectValue?.freeRecruitChance ?? 0;
+  const cost: number   = lvDef?.effectValue?.recruitCost       ?? 150;
+  const gear: number   = lvDef?.effectValue?.gearRarity        ?? 1;
+
+  const ROWS = building.levels.map((lv: any) => ({
+    level:  lv.level,
+    chance: `${Math.round((lv.effectValue?.freeRecruitChance ?? 0) * 100)}%`,
+    cost:   lv.effectValue?.recruitCost ?? 150,
+    gear:   GEAR_RARITY_LABELS[lv.effectValue?.gearRarity ?? 1] ?? 'Standard',
+  }));
+
+  return (
+    <div style={{ display: 'flex', gap: 0, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 8, overflow: 'hidden' }}>
+      <CharColumn buildingId="rosarium_vocis" />
+      <div style={{ flex: 1, minWidth: 0, padding: 16 }}>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: 13, marginTop: 0 }}>
+          The Rosarium Vocis inspires volunteers to answer the call after each victorious mission.
+          Free recruit tokens accumulate and are spent first during auto-recruit.
+          Higher levels raise the trigger chance, lower the per-recruit cost, and outfit arrivals in better gear.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <StatBox label="Victory Trigger" value={`${Math.round(chance * 100)}%`} />
+          <StatBox label="Recruit Cost"    value={`${cost} Gold`} />
+          <StatBox label="Free Tokens"     value={String(freeRecruitCount)} />
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 4 }}>Gear Tier: <strong style={{ color: 'var(--color-accent)' }}>{GEAR_RARITY_LABELS[gear] ?? 'Standard'}</strong></div>
+
+        <div style={{ overflowX: 'auto', marginTop: 12, marginBottom: 12 }}>
+          <table style={{ fontSize: 11, color: 'var(--color-text-muted)', borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                {['Level', 'Trigger', 'Cost', 'Gear Tier'].map(h => (
+                  <th key={h} style={{ padding: '4px 8px', textAlign: 'left', color: 'var(--color-text)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((row: any) => (
+                <tr key={row.level} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: row.level === building.currentLevel ? 'rgba(200,149,74,0.07)' : 'transparent' }}>
+                  <td style={{ padding: '3px 8px', color: row.level === building.currentLevel ? 'var(--color-accent)' : undefined }}>Lv {row.level}</td>
+                  <td style={{ padding: '3px 8px' }}>{row.chance}</td>
+                  <td style={{ padding: '3px 8px' }}>{row.cost}</td>
+                  <td style={{ padding: '3px 8px' }}>{row.gear}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <UpgradeStrip building={building} mbase={mbase} onUpgrade={onUpgrade} />
+      </div>
+    </div>
+  );
+}
 

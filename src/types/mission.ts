@@ -2,7 +2,7 @@ import type { Enemy } from './enemy';
 import type { Equipment } from './equipment';
 
 export type WeatherType = 'clear' | 'rain' | 'fog' | 'snow' | 'storm';
-export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme';
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'extreme' | 'hell';
 
 export interface MissionReward {
   money?: number;
@@ -82,5 +82,7 @@ export interface Mission {
   /** Whether the mission is currently locked */
   isLocked: boolean;
   /** Reward specialisation focus assigned at generation time */
-  rewardFocus?: 'gold_heavy' | 'supply_run' | 'salvage' | 'training' | 'medal' | 'balanced' | 'rescue';
+  rewardFocus?: 'gold_heavy' | 'supply_run' | 'medal' | 'weapon_gear' | 'consumable' | 'balanced' | 'strike_force' | 'rescue' | 'lyssa_wave';
+  /** True when this mission is a mandatory Lyssa Wave base-defence event */
+  isLyssaWave?: boolean;
 }

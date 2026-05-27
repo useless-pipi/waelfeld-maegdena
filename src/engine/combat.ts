@@ -88,6 +88,8 @@ export interface ExpGain {
   maidenId: string;
   subject: 'scout' | 'sneak' | 'weapon';
   weaponType?: WeaponType;
+  /** Amount of practical EXP to award (default 1). */
+  amount?: number;
 }
 
 // ── EXP level helpers ─────────────────────────────────────────────────────────
@@ -126,7 +128,9 @@ function sumBonuses(c: Combatant, stat: string): number {
     const bonuses = TAG_BONUS_MAP.get(tag.id);
     if (bonuses) {
       for (const b of bonuses) {
-        if (b.stat === stat && !b.isPercent) total += b.value;
+        // Skip hp-percent bonuses — those are handled multiplicatively in computeMaxHp.
+        // All other bonuses (including isPercent hitRate/dodge) are flat additions in their stat space.
+        if (b.stat === stat && !(b.stat === 'hp' && b.isPercent)) total += b.value;
       }
     }
   }
@@ -142,9 +146,31 @@ export function getStat(c: Combatant, stat: keyof Stats): number {
   return c.stats[stat] + sumBonuses(c, stat);
 }
 
-/** Computed max HP = constitution + constitution bonuses + hp bonuses */
+/** Computed max HP = (7 + 2×(baseCON + flat CON bonuses) + flat HP bonuses) × (1 + pct HP bonuses / 100) */
 export function computeMaxHp(c: Combatant): number {
-  return getStat(c, 'constitution') + sumBonuses(c, 'hp');
+  let flatHp = 0, pctHp = 0, flatCon = 0;
+  for (const eq of c.equipment) {
+    for (const b of eq.bonuses) {
+      if (b.stat === 'hp')                   { if (b.isPercent) pctHp += b.value; else flatHp += b.value; }
+      else if (b.stat === 'constitution')    { if (!b.isPercent) flatCon += b.value; }
+    }
+  }
+  for (const q of c.qualifications) {
+    for (const b of q.bonuses) {
+      if (b.stat === 'hp')                   { if (b.isPercent) pctHp += b.value; else flatHp += b.value; }
+      else if (b.stat === 'constitution')    { if (!b.isPercent) flatCon += b.value; }
+    }
+  }
+  for (const tag of c.tags) {
+    const bonuses = TAG_BONUS_MAP.get(tag.id);
+    if (bonuses) {
+      for (const b of bonuses) {
+        if (b.stat === 'hp')                 { if (b.isPercent) pctHp += b.value; else flatHp += b.value; }
+        else if (b.stat === 'constitution')  { if (!b.isPercent) flatCon += b.value; }
+      }
+    }
+  }
+  return Math.round((7 + 2 * (c.stats.constitution + flatCon) + flatHp) * (1 + pctHp / 100));
 }
 
 /** Equipped weapon (first weapon slot item) */
@@ -269,6 +295,24 @@ export interface SpotResult {
   bestScoutMaidenId?: string;
   /** Best-sneak maiden's ID (for EXP awarding) */
   bestSneakMaidenId?: string;
+  /** Breakdown of the decisive round's raw scores */
+  breakdown?: {
+    approachIndex: number;
+    maidenScoutBase: number;
+    maidenScoutRoll: number;
+    maidenScoutFinal: number;
+    /** Concealment of the most-exposed enemy (lowest in the group), after mass factor */
+    enemyConcealmentRaw: number;
+    enemyMassFactor: number;
+    enemyConcealmentFinal: number;
+    enemyScoutBase: number;
+    enemyScoutRoll: number;
+    enemyScoutFinal: number;
+    /** Concealment of the most-exposed maiden (lowest in the group), after mass factor */
+    maidenConcealmentRaw: number;
+    maidenMassFactor: number;
+    maidenConcealmentFinal: number;
+  };
 }
 
 /** Box-Muller transform: returns a normally distributed random number (mean=0, sd=1). */
@@ -309,31 +353,73 @@ function computeSneakIndex(c: Combatant): number {
  * Sneak = dexterity * approachIndex * sneakIndexFactor (from sneak EXP).
  * Spot = awareness + scout EXP bonus of the best spotter.
  */
+/** Compute full concealment score for a single combatant at a given approach index. */
+function computeConcealment(c: Combatant, approach: number): number {
+  return getStat(c, 'dexterity') * approach * computeSneakIndex(c);
+}
+
+/** Mass factor multiplier: teams larger than 10 lose 1% concealment per extra member. */
+function massFactor(teamSize: number): number {
+  return Math.max(0, 1 - Math.max(0, teamSize - 10) * 0.01);
+}
+
 export function resolveSpot(maidens: Combatant[], enemies: Combatant[]): SpotResult {
   let approach = 3.0;
   let round = 0;
 
-  // Identify best scout maiden and best sneak maiden for EXP purposes
+  // Identify best scout maiden for EXP purposes (highest spot score)
   const bestScout = [...maidens].sort((a, b) => computeSpotScore(b) - computeSpotScore(a))[0];
-  const bestSneak = [...maidens].sort((a, b) => getStat(b, 'dexterity') - getStat(a, 'dexterity'))[0];
+  // Identify most-exposed (lowest concealment) maiden for EXP purposes
+  const worstSneak = [...maidens].sort((a, b) => computeConcealment(a, 1) - computeConcealment(b, 1))[0];
   const bestScoutMaidenId = bestScout && isMaiden(bestScout) ? (bestScout as Maiden).id : undefined;
-  const bestSneakMaidenId = bestSneak && isMaiden(bestSneak) ? (bestSneak as Maiden).id : undefined;
+  const bestSneakMaidenId = worstSneak && isMaiden(worstSneak) ? (worstSneak as Maiden).id : undefined;
+
+  const maidenMass = massFactor(maidens.length);
+  const enemyMass  = massFactor(enemies.length);
 
   while (approach > 0) {
     round++;
-    // Best maiden spot vs best enemy sneak (with sneak index)
-    const maidenSpotScore = Math.max(...maidens.map(m => computeSpotScore(m))) * scoutRoll();
-    const enemySneak = Math.max(...enemies.map(e => getStat(e, 'dexterity') * approach * computeSneakIndex(e)));
-    const maidenSpots = maidenSpotScore > enemySneak;
 
-    // Best enemy spot vs best maiden sneak (with sneak index)
-    const enemySpotScore = Math.max(...enemies.map(e => computeSpotScore(e))) * scoutRoll();
-    const maidenSneak = Math.max(...maidens.map(m => getStat(m, 'dexterity') * approach * computeSneakIndex(m)));
-    const enemySpots = enemySpotScore > maidenSneak;
+    // ── Check 1: maiden team spots enemies ───────────────────────────────────
+    // Spotter = maiden with highest Scout Score
+    const maidenScoutBase = Math.max(...maidens.map(m => computeSpotScore(m)));
+    const maidenRoll = scoutRoll();
+    const maidenSpotScore = maidenScoutBase * maidenRoll;
+    // Concealment = LOWEST individual enemy concealment (weakest link), with mass factor
+    const enemyConcealmentRaw = Math.min(...enemies.map(e => computeConcealment(e, approach)));
+    const enemyConcealmentFinal = enemyConcealmentRaw * enemyMass;
+    const maidenSpots = maidenSpotScore > enemyConcealmentFinal;
 
-    if (maidenSpots && enemySpots) return { spotter: 'simultaneous', rounds: round, bestScoutMaidenId, bestSneakMaidenId };
-    if (maidenSpots) return { spotter: 'maiden', rounds: round, bestScoutMaidenId, bestSneakMaidenId };
-    if (enemySpots) return { spotter: 'enemy', rounds: round, bestScoutMaidenId, bestSneakMaidenId };
+    // ── Check 2: enemy team spots maidens ────────────────────────────────────
+    // Spotter = enemy with highest Scout Score
+    const enemyScoutBase = Math.max(...enemies.map(e => computeSpotScore(e)));
+    const enemyRoll = scoutRoll();
+    const enemySpotScore = enemyScoutBase * enemyRoll;
+    // Concealment = LOWEST individual maiden concealment (weakest link), with mass factor
+    const maidenConcealmentRaw = Math.min(...maidens.map(m => computeConcealment(m, approach)));
+    const maidenConcealmentFinal = maidenConcealmentRaw * maidenMass;
+    const enemySpots = enemySpotScore > maidenConcealmentFinal;
+
+    const r = (n: number) => Math.round(n * 10) / 10;
+    const breakdown = {
+      approachIndex: r(approach),
+      maidenScoutBase: r(maidenScoutBase),
+      maidenScoutRoll: r(maidenRoll),
+      maidenScoutFinal: r(maidenSpotScore),
+      enemyConcealmentRaw: r(enemyConcealmentRaw),
+      enemyMassFactor: r(enemyMass),
+      enemyConcealmentFinal: r(enemyConcealmentFinal),
+      enemyScoutBase: r(enemyScoutBase),
+      enemyScoutRoll: r(enemyRoll),
+      enemyScoutFinal: r(enemySpotScore),
+      maidenConcealmentRaw: r(maidenConcealmentRaw),
+      maidenMassFactor: r(maidenMass),
+      maidenConcealmentFinal: r(maidenConcealmentFinal),
+    };
+
+    if (maidenSpots && enemySpots) return { spotter: 'simultaneous', rounds: round, bestScoutMaidenId, bestSneakMaidenId, breakdown };
+    if (maidenSpots) return { spotter: 'maiden', rounds: round, bestScoutMaidenId, bestSneakMaidenId, breakdown };
+    if (enemySpots) return { spotter: 'enemy', rounds: round, bestScoutMaidenId, bestSneakMaidenId, breakdown };
 
     approach = Math.round((approach - 0.3) * 10) / 10;
   }
@@ -917,6 +1003,12 @@ export function simulateStage(
       if (state !== 'pending_check') continue;
       const c = m.find(x => isMaiden(x) && (x as Maiden).id === mid);
       if (!c) continue;
+      // If the maiden was already killed by gunfire in the same round, don't process
+      // as escaped/captured — she is already fallen and handled by onSyncHP.
+      if (c.currentHp <= 0) {
+        moraleZeroState.delete(mid);
+        continue;
+      }
       if (Math.random() < 0.5) {
         moraleZeroState.set(mid, 'escaped');
         moraleEscapedIds.push(mid);
@@ -996,6 +1088,8 @@ export function simulateStage(
         const pctLabel = Math.round(fleePct * 100);
         // Use applyPersonalMorale so the gain is recorded in moraleGains (morale log)
         applyPersonalMorale(eid, recovery, 'Lyssa rally', 'enemy');
+        // Also update the permanent bonus so refreshPersonalTempMorale preserves this gain
+        ePersonalPermBonus.set(eid, (ePersonalPermBonus.get(eid) ?? 0) + recovery);
         events.push({
           type: 'log', attackerName: enemy.name,
           message: `✨ [Lyssa] ${enemy.name} steels herself and fights on! (Morale +${recovery} → ${Math.min(100, next)}) [flee was ${pctLabel}%, check #${checkNumber} — next: ${Math.round(Math.min(0.95, fleePct + 0.10) * 100)}%]`,
@@ -1005,18 +1099,199 @@ export function simulateStage(
     }
   };
 
+  // ── PRE-STAGE RATIONS RESOLVER ────────────────────────────────────────────
+  const resolvePreStageRations = (): CombatEvent[] => {
+    const evts: CombatEvent[] = [];
+    for (const c of [...m, ...e]) {
+      const rations = c.equipment
+        .filter(eq => eq.slot === 'consumable' && typeof (eq as any).rationMoraleBonus === 'number')
+        .sort((a, b) => ((b as any).rarityValue ?? 1) - ((a as any).rarityValue ?? 1));
+      if (rations.length === 0) continue;
+      const isStarved = isMaiden(c) && (c as Maiden).isStarved;
+      const personalMorale = personalMoraleMap.get(getId(c)) ?? 50;
+      const eatChance = isStarved ? 1.0 : Math.max(0, (50 - personalMorale) / 50) * 0.6;
+      if (isStarved || Math.random() < eatChance) {
+        const ration = rations[0] as any;
+        ration.quantity = (ration.quantity ?? 1) - 1;
+        if (ration.quantity <= 0) c.equipment = c.equipment.filter(eq => eq !== ration);
+        const hpGain = Math.min((ration.rationHpBonus ?? 0), c.maxHp - c.currentHp);
+        c.currentHp = Math.min(c.maxHp, c.currentHp + hpGain);
+        const moraleGain: number = ration.rationMoraleBonus ?? 0;
+        const side: 'maiden' | 'enemy' = isMaiden(c) ? 'maiden' : 'enemy';
+        applyPersonalMorale(getId(c), moraleGain, `Rations (${ration.name})`, side);
+        evts.push({
+          type: 'log', attackerName: getName(c),
+          message: `🍖 ${getName(c)} eats ${ration.name} before the engagement. (+${hpGain} HP, +${moraleGain} morale)`,
+          moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+        });
+      }
+    }
+    return evts;
+  };
+
+  // ── IN-BATTLE CONSUMABLES: POTIONS + GRENADES ────────────────────────────
+  /**
+   * Resolve pre-fire consumable use for the current encounter round.
+   * - Healing potions: used if HP < 50% maxHp (does NOT skip the attack turn).
+   * - Grenades: thrown instead of the normal attack (maiden added to skipIds).
+   */
+  const resolveConsumables = (): { events: CombatEvent[]; skipIds: Set<string> } => {
+    const evts: CombatEvent[] = [];
+    const skipIds = new Set<string>();
+    for (const c of alive(m)) {
+      if (!isMaiden(c)) continue;
+      const maiden = c as Maiden;
+
+      // ── Healing potion ──────────────────────────────────────────────────
+      const potions = c.equipment
+        .filter(eq => eq.slot === 'consumable' && typeof (eq as any).healPercent === 'number')
+        .sort((a, b) => ((b as any).rarityValue ?? 1) - ((a as any).rarityValue ?? 1));
+      if (potions.length > 0 && c.currentHp < c.maxHp * 0.5) {
+        const hpRatio = c.currentHp / c.maxHp;
+        const urgency = 1 - hpRatio; // 0.5–1.0 range when below 50% HP
+        const charmFactor = Math.max(0.3, getStat(c, 'charm') / 10);
+        if (Math.random() < urgency * charmFactor) {
+          const potion = potions[0] as any;
+          potion.quantity = (potion.quantity ?? 1) - 1;
+          if (potion.quantity <= 0) c.equipment = c.equipment.filter(eq => eq !== potion);
+          const healAmt = Math.floor(c.maxHp * (potion.healPercent ?? 0.15));
+          const actualHeal = Math.min(healAmt, c.maxHp - c.currentHp);
+          c.currentHp = Math.min(c.maxHp, c.currentHp + actualHeal);
+          evts.push({
+            type: 'log', attackerName: getName(c),
+            message: `💊 ${getName(c)} uses ${potion.name}! (+${actualHeal} HP, now ${c.currentHp}/${c.maxHp} HP)`,
+            moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+          });
+        }
+      }
+
+      // ── Grenade ─────────────────────────────────────────────────────────
+      const grenades = c.equipment
+        .filter(eq => eq.slot === 'consumable' && eq.weaponType === 'grenade')
+        .sort((a, b) => ((b as any).rarityValue ?? 1) - ((a as any).rarityValue ?? 1));
+      if (grenades.length === 0) continue;
+      const aliveEnemies = alive(e);
+      if (aliveEnemies.length === 0) continue;
+      const outnumbered = aliveEnemies.length > alive(m).length;
+      const grenadeUseChance = outnumbered ? 0.6 : 0.2;
+      if (Math.random() >= grenadeUseChance) continue;
+
+      const grenade = grenades[0] as any;
+      grenade.quantity = (grenade.quantity ?? 1) - 1;
+      if (grenade.quantity <= 0) c.equipment = c.equipment.filter(eq => eq !== grenade);
+      skipIds.add(maiden.id); // grenade replaces this maiden's normal attack
+      const throwerName = getName(c);
+      if (coverSet.has(throwerName)) {
+        coverSet.delete(throwerName);
+        evts.push({ type: 'cover_lost', attackerName: throwerName, message: `[Cover] ${throwerName} breaks cover to throw a grenade!`, moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale } });
+      }
+
+      const grenadeExpData = maiden.expData?.weapons?.['grenade' as WeaponType];
+      const isTrained = !!grenadeExpData && (theoryLv(grenadeExpData.theoryExp) >= 1 || practicalLv(grenadeExpData.practicalExp) >= 1);
+      const throwHitRate = isTrained
+        ? Math.min(90, 60 + theoryLv(grenadeExpData!.theoryExp) * 5 + practicalLv(grenadeExpData!.practicalExp) * 10)
+        : 20;
+      const critErrorChance = isTrained ? 0.02 : 0.05;
+
+      // Critical error: grenade detonates prematurely
+      if (Math.random() < critErrorChance) {
+        const friendlyTargets = alive(m).filter(a => a !== c);
+        if (friendlyTargets.length > 0) {
+          const victim = friendlyTargets[Math.floor(Math.random() * friendlyTargets.length)];
+          const dmg = grenade.damage ?? 20;
+          victim.currentHp = Math.max(0, victim.currentHp - dmg);
+          evts.push({
+            type: 'attack', attackerName: throwerName, defenderName: getName(victim), damage: dmg,
+            message: `💥 [Critical Error!] ${throwerName}'s ${grenade.name} detonates prematurely! ${getName(victim)} takes ${dmg} friendly-fire damage!`,
+            moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+          });
+          if (victim.currentHp <= 0) handleKill(c, victim, false);
+          else handleHit(victim, dmg);
+        } else {
+          evts.push({
+            type: 'log', attackerName: throwerName,
+            message: `💥 [Critical Error!] ${throwerName}'s ${grenade.name} detonates early — no friendlies nearby!`,
+            moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+          });
+        }
+        continue;
+      }
+
+      // Throw roll
+      if (Math.random() * 100 > throwHitRate) {
+        evts.push({
+          type: 'miss', attackerName: throwerName,
+          message: `💣 ${throwerName} throws ${grenade.name} — it misses and detonates harmlessly! (${throwHitRate}% throw chance)`,
+          moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+        });
+        continue;
+      }
+
+      // Grenade lands: award 10 practical EXP for a successful throw (trained or not)
+      expGains.push({ maidenId: maiden.id, subject: 'weapon', weaponType: 'grenade' as WeaponType, amount: 10 });
+
+      // Grenade lands: determine blast targets
+      const burstPct: number = grenade.burstPercent ?? 0.15;
+      const primaryTarget = aliveEnemies[Math.floor(Math.random() * aliveEnemies.length)];
+      const otherTargets = aliveEnemies.filter(t => t !== primaryTarget);
+      const extraCount = Math.max(0, Math.ceil(burstPct * aliveEnemies.length) - 1);
+      const blastTargets = [primaryTarget, ...otherTargets.sort(() => 0.5 - Math.random()).slice(0, extraCount)];
+      const baseDmg: number = grenade.damage ?? 20;
+      let totalHits = 0;
+      let totalDamage = 0;
+      const hitNames: string[] = [];
+
+      for (let i = 0; i < blastTargets.length; i++) {
+        const target = blastTargets[i];
+        const dmg = i === 0 ? Math.round(baseDmg * 1.5) : baseDmg;
+        // Dodge check: higher DEX = harder to evade; grenades are harder to dodge than bullets
+        const dodgeChance = Math.max(5, Math.min(50, 30 - (getStat(target, 'dexterity') - 10) * 2));
+        if (Math.random() * 100 < dodgeChance) continue;
+        const prevHp = target.currentHp;
+        target.currentHp = isLyssa(target)
+          ? Math.max(1, target.currentHp - dmg)
+          : Math.max(0, target.currentHp - dmg);
+        const willStun = isLyssa(target) && prevHp > 1 && target.currentHp <= 1;
+        if (willStun) (target as Enemy).lyssaStunned = true;
+        totalHits++;
+        totalDamage += dmg;
+        hitNames.push(`${getName(target)} (${dmg} dmg${willStun ? ', stunned' : ''})`);
+        if (target.currentHp <= 0) handleKill(c, target, false);
+        else if (willStun) handleKill(c, target, true);
+        else handleHit(target, dmg);
+      }
+
+
+
+      const hitSummary = totalHits > 0
+        ? `hits ${hitNames.join(', ')} — total ${totalDamage} damage`
+        : 'blast lands but all targets dodge clear!';
+      evts.push({
+        type: totalHits > 0 ? 'attack' : 'miss',
+        attackerName: throwerName,
+        damage: totalDamage,
+        message: `💣 ${throwerName} hurls ${grenade.name} into the enemy formation! ${hitSummary} (${throwHitRate}% throw chance)`,
+        moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale },
+      });
+    }
+    return { events: evts, skipIds };
+  };
+
   // Helper: fire round with morale context
   const fireWithMorale = (
     attackers: Combatant[],
     defenders: Combatant[],
     label: string,
     isMaidenAttacking: boolean,
+    skipIds?: Set<string>,
   ) => {
     // Filter out zero-morale maidens from attacking
     const filteredAttackers = attackers.filter(c => {
       if (!isMaiden(c)) return true;
       const mid = (c as Maiden).id;
-      return !moraleZeroState.has(mid);
+      if (moraleZeroState.has(mid)) return false;
+      if (skipIds?.has(mid)) return false; // grenade users skip normal attack
+      return true;
     });
     // Filter out escaped combatants from being targeted — they have left the battlefield
     const filteredDefenders = defenders.filter(c => {
@@ -1074,9 +1349,20 @@ export function simulateStage(
     }
   }
 
+  // ── PRE-STAGE RATIONS ───────────────────────────────────────────────────
+  events.push(...resolvePreStageRations());
+  refreshTeamTempMorale(); refreshPersonalTempMorale();
+
   // ── SPOT PHASE ───────────────────────────────────────────────────────────
   const spotResult = resolveSpot(alive(m), alive(e));
-  events.push({ type: 'log', attackerName: '', message: `--- SPOT PHASE: ${spotResult.spotter === 'maiden' ? 'Your team spots the enemy first!' : spotResult.spotter === 'enemy' ? 'Enemy spots you first!' : 'Both teams spot each other simultaneously!'} (${spotResult.rounds} round${spotResult.rounds !== 1 ? 's' : ''})`, moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale } });
+  {
+    const outcome = spotResult.spotter === 'maiden' ? 'Your team spots the enemy first!' : spotResult.spotter === 'enemy' ? 'Enemy spots you first!' : 'Both teams spot each other simultaneously!';
+    const bd = spotResult.breakdown;
+    const bdLine = bd
+      ? ` | Approach ×${bd.approachIndex} | Scout ${bd.maidenScoutBase}×${bd.maidenScoutRoll}=${bd.maidenScoutFinal} vs EnemyConcealment(min) ${bd.enemyConcealmentRaw}×mass${bd.enemyMassFactor}=${bd.enemyConcealmentFinal} | EnemyScout ${bd.enemyScoutBase}×${bd.enemyScoutRoll}=${bd.enemyScoutFinal} vs Concealment(min) ${bd.maidenConcealmentRaw}×mass${bd.maidenMassFactor}=${bd.maidenConcealmentFinal}`
+      : '';
+    events.push({ type: 'log', attackerName: '', message: `--- SPOT PHASE: ${outcome} (${spotResult.rounds} round${spotResult.rounds !== 1 ? 's' : ''})${bdLine}`, moraleSnapshot: { maidenTeam: mTeamMorale, enemyTeam: eTeamMorale } });
+  }
 
   if (spotResult.spotter === 'maiden' || spotResult.spotter === 'simultaneous') {
     if (spotResult.bestScoutMaidenId) expGains.push({ maidenId: spotResult.bestScoutMaidenId, subject: 'scout' });
@@ -1182,7 +1468,11 @@ export function simulateStage(
       return makeResult('maiden_retreat_success');
     }
 
-    events.push(...fireWithMorale(alive(m), e, 'Attack', true));
+    const consumResult = resolveConsumables();
+    events.push(...consumResult.events);
+    refreshTeamTempMorale(); refreshPersonalTempMorale(); checkZeroMoraleMaidens(); checkZeroMoraleEnemies();
+
+    events.push(...fireWithMorale(alive(m), e, 'Attack', true, consumResult.skipIds));
     refreshTeamTempMorale(); refreshPersonalTempMorale(); checkZeroMoraleMaidens(); checkZeroMoraleEnemies();
 
     if (alive(e).length === 0) {

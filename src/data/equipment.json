@@ -1,5 +1,17 @@
 [
   {
+    "id": "revenant_bloom",
+    "name": "The Revenant Bloom",
+    "slot": "consumable",
+    "bonuses": [],
+    "price": 0,
+    "weight": 0,
+    "quantity": 1,
+    "noEquip": true,
+    "description": "A luminescent flower said to bloom only where a warrior has fallen and refused to stay dead. Seven blooms burned together can recall a fallen heroine's spirit.",
+    "rarityValue": 3
+  },
+  {
     "id": "basic_rifle",
     "name": "Standard Rifle",
     "slot": "weapon",
@@ -10,7 +22,8 @@
     "price": 50,
     "weight": 9,
     "description": "A reliable bolt-action rifle issued to all recruits.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "marksman_rifle",
@@ -23,7 +36,8 @@
     "price": 150,
     "weight": 12,
     "description": "A precision rifle favoured by sharpshooters.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "shotgun",
@@ -36,103 +50,591 @@
     "price": 100,
     "weight": 8,
     "description": "Devastating at close range but unreliable at distance.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "iron_helmet",
     "name": "Iron Helmet",
     "slot": "head",
-    "bonuses": [{ "label": "Dodge", "value": -2, "stat": "dodge", "isPercent": true }, { "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Dodge",
+        "value": -2,
+        "stat": "dodge",
+        "isPercent": true
+      },
+      {
+        "label": "HP",
+        "value": 2,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 60,
     "weight": 4,
     "description": "Heavy but protective head gear.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "leather_vest",
     "name": "Leather Vest",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 3, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 3,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 80,
     "weight": 6,
     "description": "Supple leather offering moderate torso protection.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "combat_boots",
     "name": "Combat Boots",
     "slot": "legs",
-    "bonuses": [{ "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
     "price": 70,
     "weight": 3,
     "description": "Sturdy boots that keep the wearer sure-footed.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "healing_potion",
     "name": "Healing Potion",
     "slot": "consumable",
     "bonuses": [],
+    "healPercent": 0.15,
     "price": 30,
+    "shopTier": 1,
     "weight": 1,
-    "description": "Restores 10 HP when used in combat.",
-    "quantity": 3
+    "description": "A basic healing compound. Restores 15% of max HP when used in battle. Auto-used when HP drops below 50%.",
+    "quantity": 3,
+    "rarityValue": 1
   },
   {
     "id": "field_rations",
     "name": "Field Rations",
     "slot": "consumable",
     "bonuses": [],
+    "rationMoraleBonus": 10,
+    "rationHpBonus": 3,
     "price": 20,
+    "shopTier": 1,
     "weight": 2,
-    "description": "Keeps a maiden in fighting shape between engagements.",
-    "quantity": 5
+    "description": "Basic field rations. Grants +10 temporary morale and +3 HP when consumed before a stage. Auto-used when morale is low or maiden is starved.",
+    "quantity": 5,
+    "rarityValue": 1
+  },
+  {
+    "id": "field_potion",
+    "name": "Field Healing Potion",
+    "slot": "consumable",
+    "bonuses": [],
+    "healPercent": 0.3,
+    "price": 70,
+    "shopTier": 3,
+    "weight": 1,
+    "description": "A refined healing compound. Restores 30% of max HP when used in battle.",
+    "quantity": 2,
+    "rarityValue": 2
+  },
+  {
+    "id": "advanced_potion",
+    "name": "Advanced Healing Potion",
+    "slot": "consumable",
+    "bonuses": [],
+    "healPercent": 0.5,
+    "price": 140,
+    "shopTier": 5,
+    "weight": 1,
+    "description": "A potent military-grade healing compound. Restores 50% of max HP when used in battle.",
+    "quantity": 2,
+    "rarityValue": 3
+  },
+  {
+    "id": "premium_potion",
+    "name": "Premium Healing Potion",
+    "slot": "consumable",
+    "bonuses": [],
+    "healPercent": 0.75,
+    "price": 280,
+    "shopTier": 7,
+    "isRare": true,
+    "weight": 1,
+    "description": "An HQ-grade restorative compound. Restores 75% of max HP when used in battle. Life-saving in critical moments.",
+    "quantity": 1,
+    "rarityValue": 4
+  },
+  {
+    "id": "improved_rations",
+    "name": "Improved Field Rations",
+    "slot": "consumable",
+    "bonuses": [],
+    "rationMoraleBonus": 20,
+    "rationHpBonus": 6,
+    "price": 45,
+    "shopTier": 3,
+    "weight": 2,
+    "description": "Enhanced field rations. Grants +20 temporary morale and +6 HP when consumed before a stage.",
+    "quantity": 3,
+    "rarityValue": 2
+  },
+  {
+    "id": "highgrade_rations",
+    "name": "High-Grade Rations",
+    "slot": "consumable",
+    "bonuses": [],
+    "rationMoraleBonus": 32,
+    "rationHpBonus": 10,
+    "price": 90,
+    "shopTier": 5,
+    "weight": 2,
+    "description": "Military high-grade rations. Grants +32 temporary morale and +10 HP when consumed before a stage.",
+    "quantity": 2,
+    "rarityValue": 3
+  },
+  {
+    "id": "elite_rations",
+    "name": "Elite Combat Rations",
+    "slot": "consumable",
+    "bonuses": [],
+    "rationMoraleBonus": 50,
+    "rationHpBonus": 15,
+    "price": 180,
+    "shopTier": 7,
+    "isRare": true,
+    "weight": 2,
+    "description": "HQ-issue elite combat rations. Grants +50 temporary morale and +15 HP. Treasured by veteran commanders.",
+    "quantity": 2,
+    "rarityValue": 4
+  },
+  {
+    "id": "frag_grenade",
+    "name": "Fragmentation Grenade",
+    "slot": "consumable",
+    "weaponType": "grenade",
+    "bonuses": [],
+    "damage": 22,
+    "burstPercent": 0.15,
+    "price": 55,
+    "shopTier": 2,
+    "weight": 1,
+    "description": "A standard frag grenade. Hits up to 15% of the enemy formation. 20% base throw accuracy without training; 60%+ with grenade EXP.",
+    "quantity": 2,
+    "rarityValue": 1
+  },
+  {
+    "id": "concussion_grenade",
+    "name": "Concussion Grenade",
+    "slot": "consumable",
+    "weaponType": "grenade",
+    "bonuses": [],
+    "damage": 36,
+    "burstPercent": 0.22,
+    "price": 110,
+    "shopTier": 4,
+    "weight": 1,
+    "description": "A heavy concussion grenade with a 22% blast radius. Greater damage and area than a frag grenade.",
+    "quantity": 2,
+    "rarityValue": 2
+  },
+  {
+    "id": "incendiary_grenade",
+    "name": "Incendiary Grenade",
+    "slot": "consumable",
+    "weaponType": "grenade",
+    "bonuses": [],
+    "damage": 50,
+    "burstPercent": 0.28,
+    "price": 200,
+    "shopTier": 6,
+    "weight": 1,
+    "description": "An incendiary grenade with a 28% blast radius. Burns through cover. Requires skilled handling to avoid critical errors.",
+    "quantity": 2,
+    "rarityValue": 3
+  },
+  {
+    "id": "void_grenade",
+    "name": "Void Grenade",
+    "slot": "consumable",
+    "weaponType": "grenade",
+    "bonuses": [],
+    "damage": 65,
+    "burstPercent": 0.35,
+    "price": 400,
+    "shopTier": 8,
+    "isRare": true,
+    "weight": 1,
+    "description": "An HQ-engineered void-charge grenade with a 35% blast radius. Devastating against clustered opponents. Extremely rare.",
+    "quantity": 1,
+    "rarityValue": 4
   },
   {
     "id": "medal_of_bravery",
     "name": "Medal of Bravery",
     "slot": "medal",
-    "bonuses": [{ "label": "Charm", "value": 2, "stat": "charm", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 2,
+        "stat": "charm",
+        "isPercent": false
+      }
+    ],
     "price": 200,
     "weight": 0.1,
     "description": "Awarded for outstanding bravery in the face of overwhelming odds.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "medal_r1",
+    "name": "Campaign Ribbon",
+    "slot": "medal",
+    "medalRarity": 1,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 1,
+        "stat": "charm",
+        "isPercent": false
+      }
+    ],
+    "price": 30,
+    "weight": 0.1,
+    "description": "Awarded for completing a frontline campaign. A small but meaningful honour.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "medal_r2",
+    "name": "Service Cross",
+    "slot": "medal",
+    "medalRarity": 2,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 1,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 60,
+    "weight": 0.1,
+    "description": "Recognises sustained service under difficult conditions.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "medal_r3",
+    "name": "Valor Badge",
+    "slot": "medal",
+    "medalRarity": 3,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 2,
+        "stat": "charm",
+        "isPercent": false
+      }
+    ],
+    "price": 90,
+    "weight": 0.1,
+    "description": "Presented for demonstrating personal bravery during combat.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "medal_r4",
+    "name": "Distinguished Cross",
+    "slot": "medal",
+    "medalRarity": 4,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 2,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 1,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "price": 130,
+    "weight": 0.1,
+    "description": "Awarded for distinguished conduct and battlefield leadership.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "medal_r5",
+    "name": "Silver Star",
+    "slot": "medal",
+    "medalRarity": 5,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 3,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 180,
+    "weight": 0.1,
+    "description": "A prestigious commendation for exceptional performance in the field.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "medal_r6",
+    "name": "Commander's Cross",
+    "slot": "medal",
+    "medalRarity": 6,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 3,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 2,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "price": 250,
+    "weight": 0.1,
+    "description": "Granted to commanders who demonstrate exemplary tactical leadership.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "medal_r7",
+    "name": "Legion of Honour",
+    "slot": "medal",
+    "medalRarity": 7,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 4,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 2,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "price": 350,
+    "weight": 0.1,
+    "description": "One of the highest honours for battlefield service and tactical excellence.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "medal_r8",
+    "name": "Hero's Medallion",
+    "slot": "medal",
+    "medalRarity": 8,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 4,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 3,
+        "stat": "strategy",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 500,
+    "weight": 0.1,
+    "description": "Awarded only to heroes whose deeds have inspired the entire force.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "medal_r9",
+    "name": "Grand Cross of Valour",
+    "slot": "medal",
+    "medalRarity": 9,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 5,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 3,
+        "stat": "strategy",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 700,
+    "weight": 0.1,
+    "description": "Near the pinnacle of military decoration. Seldom awarded, never forgotten.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "medal_r10",
+    "name": "Supreme Valour Medal",
+    "slot": "medal",
+    "medalRarity": 10,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 6,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 4,
+        "stat": "strategy",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 1000,
+    "weight": 0.1,
+    "description": "The highest military honour. Awarded for acts of supreme valour that turned the tide of battle.",
+    "quantity": null,
+    "rarityValue": 5
   },
   {
     "id": "spyglass",
     "name": "Spyglass",
     "slot": "accessory",
-    "bonuses": [{ "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 4,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "price": 120,
     "weight": 1,
     "description": "Extends effective spotting range significantly.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "reinforced_vest",
     "name": "Reinforced Vest",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 6, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 6,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 140,
     "craftable": true,
     "craftTier": 1,
-    "craftCost": { "money": 0, "wood": 20, "metal": 30 },
+    "craftCost": {
+      "money": 0,
+      "wood": 20,
+      "metal": 30
+    },
     "weight": 10,
     "description": "A thick padded vest reinforced with metal plating. Crafted in the factory.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "steel_helmet",
     "name": "Steel Helmet",
     "slot": "head",
-    "bonuses": [{ "label": "HP", "value": 4, "stat": "hp", "isPercent": false }, { "label": "Dodge", "value": -1, "stat": "dodge", "isPercent": true }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 4,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dodge",
+        "value": -1,
+        "stat": "dodge",
+        "isPercent": true
+      }
+    ],
     "price": 90,
     "craftable": true,
     "craftTier": 1,
-    "craftCost": { "money": 0, "wood": 0, "metal": 25 },
+    "craftCost": {
+      "money": 0,
+      "wood": 0,
+      "metal": 25
+    },
     "weight": 6,
     "description": "Forged steel helmet offering solid head protection at a slight mobility cost.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "long_rifle",
@@ -145,10 +647,15 @@
     "price": 200,
     "craftable": true,
     "craftTier": 2,
-    "craftCost": { "money": 80, "wood": 20, "metal": 60 },
+    "craftCost": {
+      "money": 80,
+      "wood": 20,
+      "metal": 60
+    },
     "weight": 11,
     "description": "A factory-produced long barrel rifle balancing damage and accuracy.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "combat_smg",
@@ -162,23 +669,40 @@
     "price": 180,
     "craftable": true,
     "craftTier": 2,
-    "craftCost": { "money": 100, "wood": 0, "metal": 80 },
+    "craftCost": {
+      "money": 100,
+      "wood": 0,
+      "metal": 80
+    },
     "weight": 6,
     "description": "A compact submachine gun with excellent close-quarters accuracy.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "scout_scope",
     "name": "Scout Scope",
     "slot": "accessory",
-    "bonuses": [{ "label": "Awareness", "value": 6, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 6,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "price": 160,
     "craftable": true,
     "craftTier": 2,
-    "craftCost": { "money": 60, "wood": 10, "metal": 40 },
+    "craftCost": {
+      "money": 60,
+      "wood": 10,
+      "metal": 40
+    },
     "weight": 1,
     "description": "A high-quality optical scope that dramatically improves spotting range.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "machine_gun",
@@ -191,10 +715,15 @@
     "price": 350,
     "craftable": true,
     "craftTier": 3,
-    "craftCost": { "money": 150, "wood": 0, "metal": 150 },
+    "craftCost": {
+      "money": 150,
+      "wood": 0,
+      "metal": 150
+    },
     "weight": 25,
-    "description": "A heavy automatic weapon. Enormous firepower, poor accuracy — best at suppression.",
-    "quantity": null
+    "description": "A heavy automatic weapon. Enormous firepower, poor accuracy  Ebest at suppression.",
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "phantom_sniper",
@@ -206,75 +735,142 @@
     "hitRateBonus": 20,
     "price": 2000,
     "isRare": true,
-    "hqExtraCost": { "metal": 100 },
+    "hqExtraCost": {
+      "metal": 100
+    },
     "weight": 14,
     "description": "A masterwork HQ precision rifle. Whisper-quiet, absolutely lethal at distance.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "reaper_smg",
     "name": "Reaper SMG",
     "slot": "weapon",
     "weaponType": "smg",
-    "bonuses": [{ "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "damage": 16,
     "hitRateBonus": 10,
     "shotsPerRound": 3,
     "price": 1800,
     "isRare": true,
-    "hqExtraCost": { "wood": 50 },
+    "hqExtraCost": {
+      "wood": 50
+    },
     "weight": 7,
     "description": "An HQ-issue rapid-fire SMG with integrated targeting optics. High lethality at close range.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "ironclad_shotgun",
     "name": "Ironclad Shotgun",
     "slot": "weapon",
     "weaponType": "shotgun",
-    "bonuses": [{ "label": "Strength", "value": 4, "stat": "strength", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
     "damage": 48,
     "hitRateBonus": -5,
     "price": 1600,
     "isRare": true,
     "weight": 12,
     "description": "Reinforced HQ shotgun housing an oversized chamber. Devastating at close range.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "void_armor",
     "name": "Void Armor",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 12, "stat": "hp", "isPercent": false }, { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 12,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
     "price": 2500,
     "isRare": true,
-    "hqExtraCost": { "metal": 80 },
+    "hqExtraCost": {
+      "metal": 80
+    },
     "weight": 20,
     "description": "Experimental HQ body armor constructed from void-steel alloy. Near-impenetrable.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "shadowveil_cloak",
     "name": "Shadowveil Cloak",
     "slot": "accessory",
-    "bonuses": [{ "label": "Dodge", "value": 10, "stat": "dodge", "isPercent": true }, { "label": "Awareness", "value": 6, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Dodge",
+        "value": 10,
+        "stat": "dodge",
+        "isPercent": true
+      },
+      {
+        "label": "Awareness",
+        "value": 6,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "price": 2000,
     "isRare": true,
-    "hqExtraCost": { "wood": 60 },
+    "hqExtraCost": {
+      "wood": 60
+    },
     "weight": 2,
     "description": "HQ-issued adaptive camouflage cloak. Dramatically enhances stealth and situational awareness.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "commanders_seal",
     "name": "Commander's Seal",
     "slot": "medal",
-    "bonuses": [{ "label": "Charm", "value": 6, "stat": "charm", "isPercent": false }, { "label": "Strategy", "value": 4, "stat": "strategy", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 6,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 4,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
     "price": 1500,
     "isRare": true,
     "weight": 0.1,
     "description": "A distinguished HQ decoration awarded to the finest field commanders. Inspires absolute loyalty.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "light_machine_gun",
@@ -288,7 +884,8 @@
     "price": 200,
     "weight": 18,
     "description": "A light machine gun that fires a 5-round burst at a single target. Each shot rolls hit and cover independently.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "heavy_machine_gun",
@@ -302,7 +899,8 @@
     "price": 400,
     "weight": 30,
     "description": "A heavy machine gun firing a 10-round burst at a single target. Each shot resolved independently for hit and cover.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "emergency_clothes",
@@ -313,7 +911,8 @@
     "price": 0,
     "weight": 1,
     "description": "Whatever she was wearing when she answered the call. Offers no protection whatsoever.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "emergency_boots",
@@ -324,29 +923,46 @@
     "price": 0,
     "weight": 1,
     "description": "Scuffed everyday footwear. Barely serviceable for marching.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "maiden_dress_standard",
     "name": "Waelfeld Field Dress",
     "slot": "body",
     "faction": "maiden",
-    "bonuses": [{ "label": "HP", "value": 4, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 4,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 40,
     "weight": 3,
     "description": "Standard-issue military dress worn by Waelfeld maidens. Reinforced lining provides modest protection.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "maiden_boots_standard",
     "name": "Marching Greaves",
     "slot": "legs",
     "faction": "maiden",
-    "bonuses": [{ "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 2,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 30,
     "weight": 3,
     "description": "Sturdy marching greaves issued to all Waelfeld recruits.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "heroine_dress",
@@ -354,14 +970,25 @@
     "slot": "body",
     "faction": "maiden",
     "bonuses": [
-      { "label": "HP", "value": 10, "stat": "hp", "isPercent": false },
-      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+      {
+        "label": "HP",
+        "value": 10,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
     ],
     "price": 500,
     "isRare": true,
     "weight": 5,
     "description": "A masterwork battle dress worn only by elite heroines. Enchanted weave greatly bolsters endurance.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "heroine_boots",
@@ -369,14 +996,25 @@
     "slot": "legs",
     "faction": "maiden",
     "bonuses": [
-      { "label": "HP", "value": 5, "stat": "hp", "isPercent": false },
-      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+      {
+        "label": "HP",
+        "value": 5,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
     ],
     "price": 300,
     "isRare": true,
     "weight": 3,
     "description": "Lightweight heroine-grade greaves that keep the wearer swift and protected.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "heroine_rifle",
@@ -391,7 +1029,8 @@
     "isRare": true,
     "weight": 10,
     "description": "A finely crafted heroine-issue precision rifle. Exceptional accuracy and stopping power.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "heroine_machine_gun",
@@ -407,18 +1046,33 @@
     "isRare": true,
     "weight": 18,
     "description": "A heroine-grade burst machine gun. Each burst fires 5 rounds with independent hit and cover checks.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "sturdy_legguards",
     "name": "Sturdy Legguards",
     "slot": "legs",
-    "bonuses": [{ "label": "HP", "value": 5, "stat": "hp", "isPercent": false }, { "label": "Dodge", "value": 1, "stat": "dodge", "isPercent": true }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 5,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dodge",
+        "value": 1,
+        "stat": "dodge",
+        "isPercent": true
+      }
+    ],
     "price": 220,
     "shopTier": 4,
     "weight": 5,
     "description": "Reinforced field legguards that absorb punishment while keeping the wearer agile.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "tactical_smg",
@@ -433,18 +1087,33 @@
     "shopTier": 4,
     "weight": 5,
     "description": "A compact two-burst SMG with refined targeting. Reliable and fast.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "combat_plate",
     "name": "Combat Plate",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 8, "stat": "hp", "isPercent": false }, { "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 8,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 1,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
     "price": 260,
     "shopTier": 4,
     "weight": 12,
     "description": "A solid mid-tier armour plate combining coverage and durability.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "battle_rifle",
@@ -458,47 +1127,103 @@
     "shopTier": 5,
     "weight": 13,
     "description": "A hard-hitting battle rifle with improved barrel rifling. Punches through most light cover.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "thermal_goggles",
     "name": "Thermal Goggles",
     "slot": "head",
-    "bonuses": [{ "label": "Awareness", "value": 6, "stat": "awareness", "isPercent": false }, { "label": "HP", "value": 2, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 6,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "HP",
+        "value": 2,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 320,
     "shopTier": 5,
     "weight": 2,
     "description": "High-tech goggles with heat detection capability. Dramatically improves situational awareness.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "heavy_assault_boots",
     "name": "Heavy Assault Boots",
     "slot": "legs",
-    "bonuses": [{ "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }, { "label": "HP", "value": 4, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "HP",
+        "value": 4,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 250,
     "shopTier": 5,
     "weight": 5,
     "description": "Thick-soled boots built for aggressive assault operations. Excellent grip and ankle support.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "tactical_plate",
     "name": "Tactical Plate Carrier",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 10, "stat": "hp", "isPercent": false }, { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }, { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 10,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 1,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
     "price": 550,
     "shopTier": 6,
     "weight": 16,
     "description": "A modular plate carrier used by elite assault forces. Maximises protection without sacrificing too much mobility.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "stalker_smg",
     "name": "Stalker SMG",
     "slot": "weapon",
     "weaponType": "smg",
-    "bonuses": [{ "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "damage": 18,
     "hitRateBonus": 15,
     "shotsPerRound": 3,
@@ -506,36 +1231,72 @@
     "shopTier": 6,
     "weight": 7,
     "description": "A three-burst SMG with integrated low-light optics. Lethal in close quarters and agile in pursuit.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "sniper_scope_mkii",
     "name": "Sniper Scope Mk.II",
     "slot": "accessory",
-    "bonuses": [{ "label": "Awareness", "value": 10, "stat": "awareness", "isPercent": false }, { "label": "Dodge", "value": -2, "stat": "dodge", "isPercent": true }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 10,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Dodge",
+        "value": -2,
+        "stat": "dodge",
+        "isPercent": true
+      }
+    ],
     "price": 750,
     "shopTier": 7,
     "weight": 2,
     "description": "A high-magnification scope tuned for extreme-range precision. Limits peripheral vision slightly.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "fieldwork_boots",
     "name": "Fieldwork Boots",
     "slot": "legs",
-    "bonuses": [{ "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false }, { "label": "HP", "value": 5, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 3,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "HP",
+        "value": 5,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "price": 480,
     "shopTier": 7,
     "weight": 4,
     "description": "Purpose-engineered boots for extended field operations. Swift, protective, reliable.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 4
   },
   {
     "id": "annihilator",
     "name": "Annihilator Cannon",
     "slot": "weapon",
     "weaponType": "machine_gun",
-    "bonuses": [{ "label": "Strength", "value": 4, "stat": "strength", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
     "damage": 25,
     "hitRateBonus": -20,
     "shotsPerRound": 10,
@@ -544,14 +1305,22 @@
     "isRare": true,
     "weight": 35,
     "description": "A legendary HQ-engineered rotary cannon of immense destructive potential. Tears through armour, cover, and formations alike. Demands a truly strong bearer.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 5
   },
   {
     "id": "eclipse_rifle",
     "name": "Eclipse Precision Rifle",
     "slot": "weapon",
     "weaponType": "sniper_rifle",
-    "bonuses": [{ "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 5,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
     "damage": 60,
     "hitRateBonus": 35,
     "price": 4500,
@@ -559,31 +1328,72 @@
     "isRare": true,
     "weight": 15,
     "description": "The pinnacle of sniper engineering. An almost mythical precision rifle that renders distance meaningless. One shot, one fate.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 5
   },
   {
     "id": "aegis_plate",
     "name": "Aegis Combat Plate",
     "slot": "body",
-    "bonuses": [{ "label": "HP", "value": 20, "stat": "hp", "isPercent": false }, { "label": "Constitution", "value": 5, "stat": "constitution", "isPercent": false }, { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 20,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 5,
+        "stat": "constitution",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
     "price": 5500,
     "shopTier": 10,
     "isRare": true,
     "weight": 24,
     "description": "Experimental HQ full-coverage battle armour. Transforms the wearer into a living fortress. A game-changing defensive asset.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 5
   },
   {
     "id": "valkyrie_crown",
     "name": "Valkyrie War Crown",
     "slot": "head",
-    "bonuses": [{ "label": "HP", "value": 10, "stat": "hp", "isPercent": false }, { "label": "Awareness", "value": 8, "stat": "awareness", "isPercent": false }, { "label": "Charm", "value": 4, "stat": "charm", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 10,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 8,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Charm",
+        "value": 4,
+        "stat": "charm",
+        "isPercent": false
+      }
+    ],
     "price": 3500,
     "shopTier": 10,
     "isRare": true,
     "weight": 3,
     "description": "A legendary HQ-issued crown of authority. Inspires maidens to surpass their limits. Said to turn the tide of even hopeless battles.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 5
   },
   {
     "id": "enemy_rifle_mk2",
@@ -596,7 +1406,8 @@
     "hitRateBonus": 10,
     "weight": 12,
     "description": "A precision rifle carried by veteran rogue marksmen.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "enemy_shotgun",
@@ -609,7 +1420,8 @@
     "hitRateBonus": -10,
     "weight": 8,
     "description": "A close-range scatter weapon favoured by rogue breachers.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "enemy_smg",
@@ -623,7 +1435,8 @@
     "hitRateBonus": 8,
     "weight": 6,
     "description": "A compact burst-fire SMG used by rogue assault units.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "enemy_lmg",
@@ -637,7 +1450,8 @@
     "hitRateBonus": -30,
     "weight": 18,
     "description": "A rogue-issue light machine gun with suppression capability.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "enemy_rifle",
@@ -650,27 +1464,44 @@
     "hitRateBonus": 0,
     "weight": 9,
     "description": "Standard rifle issued to rogue infantry units.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "enemy_uniform",
     "name": "Rogue Infantry Coat",
     "slot": "body",
     "faction": "enemy",
-    "bonuses": [{ "label": "HP", "value": 3, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 3,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "weight": 4,
     "description": "Thick wool infantry coat worn by rogue grunt soldiers.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "enemy_boots",
     "name": "Rogue Patrol Boots",
     "slot": "legs",
     "faction": "enemy",
-    "bonuses": [{ "label": "HP", "value": 1, "stat": "hp", "isPercent": false }],
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 1,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
     "weight": 3,
     "description": "Heavy patrol boots standard to rogue infantry.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 1
   },
   {
     "id": "lyssa_rifle",
@@ -683,7 +1514,8 @@
     "hitRateBonus": 15,
     "weight": 11,
     "description": "High-precision rifle issued to Lyssa field operatives.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "lyssa_machine_gun",
@@ -697,7 +1529,8 @@
     "shotsPerRound": 5,
     "weight": 18,
     "description": "Lyssa-issue burst machine gun. 5-round burst, each shot independently resolved.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 2
   },
   {
     "id": "lyssa_armor",
@@ -705,12 +1538,23 @@
     "slot": "body",
     "faction": "enemy",
     "bonuses": [
-      { "label": "HP", "value": 8, "stat": "hp", "isPercent": false },
-      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+      {
+        "label": "HP",
+        "value": 12,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 3,
+        "stat": "constitution",
+        "isPercent": false
+      }
     ],
     "weight": 15,
     "description": "Heavy battle armour worn by elite Lyssa commanders.",
-    "quantity": null
+    "quantity": null,
+    "rarityValue": 3
   },
   {
     "id": "lyssa_boots",
@@ -718,11 +1562,3174 @@
     "slot": "legs",
     "faction": "enemy",
     "bonuses": [
-      { "label": "HP", "value": 4, "stat": "hp", "isPercent": false },
-      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+      {
+        "label": "HP",
+        "value": 6,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
     ],
     "weight": 4,
     "description": "Elite combat greaves worn by Lyssa officers.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "cloth_mask",
+    "name": "Cloth Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "price": 40,
+    "shopTier": 2,
+    "weight": 0.5,
+    "craftable": true,
+    "craftTier": 1,
+    "craftCost": {
+      "money": 30,
+      "wood": 5,
+      "metal": 5
+    },
+    "description": "A simple cloth face covering that keeps dust and debris out of your eyes.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "combat_mask",
+    "name": "Combat Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 120,
+    "shopTier": 4,
+    "weight": 1,
+    "craftable": true,
+    "craftTier": 2,
+    "craftCost": {
+      "money": 100,
+      "wood": 10,
+      "metal": 20
+    },
+    "description": "A padded combat mask with reinforced eye guards. Improves reaction time and awareness.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "stealth_mask",
+    "name": "Stealth Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 3,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 1,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "price": 300,
+    "shopTier": 6,
+    "weight": 1,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 3,
+    "craftCost": {
+      "money": 250,
+      "wood": 20,
+      "metal": 60
+    },
+    "description": "A fitted infiltration mask with integrated optics. Worn by specialist operatives.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "phantom_mask",
+    "name": "Phantom Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 4,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 700,
+    "shopTier": 8,
+    "weight": 1,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 4,
+    "craftCost": {
+      "money": 500,
+      "wood": 30,
+      "metal": 120
+    },
+    "description": "A high-tech tactical mask with enhanced optical filtering and adaptive camouflage lining.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "void_mask",
+    "name": "Void Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 5,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 1500,
+    "shopTier": 10,
+    "weight": 1,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 5,
+    "craftCost": {
+      "money": 1000,
+      "wood": 60,
+      "metal": 250
+    },
+    "description": "An enigmatic void-forged mask. Those who wear it seem to move faster than the eye can follow.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "enemy_mask",
+    "name": "Enemy Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.5,
+    "faction": "enemy",
+    "description": "Standard issue enemy combat mask.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_mask",
+    "name": "Lyssa Mask",
+    "slot": "mask",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 5,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 1,
+    "faction": "enemy",
+    "description": "The ritualistic mask worn by Lyssa officers. Imbued with unsettling presence.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "field_gloves",
+    "name": "Field Gloves",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 1,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "price": 50,
+    "shopTier": 1,
+    "weight": 1,
+    "craftable": true,
+    "craftTier": 1,
+    "craftCost": {
+      "money": 40,
+      "wood": 0,
+      "metal": 10
+    },
+    "description": "Standard-issue reinforced gloves. Provide grip and protect the hands in the field.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "reinforced_gauntlets",
+    "name": "Reinforced Gauntlets",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "price": 150,
+    "shopTier": 3,
+    "weight": 1.5,
+    "craftable": true,
+    "craftTier": 2,
+    "craftCost": {
+      "money": 120,
+      "wood": 0,
+      "metal": 30
+    },
+    "description": "Metal-plated gauntlets that augment grip strength without sacrificing dexterity.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "assault_vambraces",
+    "name": "Assault Vambraces",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 1,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "price": 350,
+    "shopTier": 5,
+    "weight": 2,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 3,
+    "craftCost": {
+      "money": 280,
+      "wood": 0,
+      "metal": 80
+    },
+    "description": "Heavy forearm guards worn by assault operatives. Built for endurance and force.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "power_gauntlets",
+    "name": "Power Gauntlets",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "price": 800,
+    "shopTier": 7,
+    "weight": 2,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 4,
+    "craftCost": {
+      "money": 600,
+      "wood": 0,
+      "metal": 150
+    },
+    "description": "Exo-reinforced power gauntlets that significantly augment the wearer's physical output.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "titan_arms",
+    "name": "Titan Arms",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 5,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 3,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "price": 1800,
+    "shopTier": 9,
+    "weight": 2,
+    "isRare": true,
+    "craftable": true,
+    "craftTier": 5,
+    "craftCost": {
+      "money": 1200,
+      "wood": 0,
+      "metal": 350
+    },
+    "description": "Legendary void-forged arm armour. Those who wear it are said to hit like a freight train.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "enemy_armguards",
+    "name": "Enemy Armguards",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 1,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "weight": 1,
+    "faction": "enemy",
+    "description": "Standard enemy combat arm guards.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_armguards",
+    "name": "Lyssa Armguards",
+    "slot": "arms",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 5,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 3,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 1.5,
+    "faction": "enemy",
+    "description": "Ritual arm guards worn by Lyssa officers. Hardened by ancient rites.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_rifle_mk3",
+    "name": "Rogue Precision Rifle",
+    "slot": "weapon",
+    "weaponType": "rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 22,
+    "hitRateBonus": 15,
+    "weight": 11,
+    "description": "A high-precision rifle carried by elite rogue marksmen. Accurate and lethal.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_shotgun_mk2",
+    "name": "Rogue Combat Scatter Gun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 36,
+    "hitRateBonus": -8,
+    "weight": 9,
+    "description": "An upgraded rogue scatter gun with improved chamber and tighter spread.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "enemy_shotgun_mk3",
+    "name": "Rogue Heavy Scatter Gun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 46,
+    "hitRateBonus": -5,
+    "weight": 11,
+    "description": "A reinforced heavy scatter gun used by rogue breacher elites. Devastating at close range.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_smg_mk2",
+    "name": "Rogue Burst SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "faction": "enemy",
+    "shotsPerRound": 3,
+    "bonuses": [],
+    "damage": 13,
+    "hitRateBonus": 10,
+    "weight": 6,
+    "description": "A mid-tier rogue burst SMG with improved barrel rifling and grip.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_smg_mk3",
+    "name": "Rogue Elite SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "faction": "enemy",
+    "shotsPerRound": 3,
+    "bonuses": [],
+    "damage": 18,
+    "hitRateBonus": 15,
+    "weight": 7,
+    "description": "A high-grade rogue SMG fielded by elite assault units. Fast, accurate, lethal.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_lmg_mk2",
+    "name": "Rogue Medium Machine Gun",
+    "slot": "weapon",
+    "weaponType": "machine_gun",
+    "faction": "enemy",
+    "shotsPerRound": 6,
+    "bonuses": [],
+    "damage": 13,
+    "hitRateBonus": -30,
+    "weight": 22,
+    "description": "A medium-class rogue machine gun with increased burst capacity.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_lmg_mk3",
+    "name": "Rogue Heavy Machine Gun",
+    "slot": "weapon",
+    "weaponType": "machine_gun",
+    "faction": "enemy",
+    "shotsPerRound": 8,
+    "bonuses": [],
+    "damage": 18,
+    "hitRateBonus": -20,
+    "weight": 28,
+    "description": "A heavy rogue machine gun carried only by the strongest enemy soldiers. Punishing rate of fire.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_uniform_mk2",
+    "name": "Rogue Reinforced Coat",
+    "slot": "body",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 6,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 1,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 7,
+    "description": "A reinforced rogue infantry coat with metal-plated lining. Worn by veterans.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_uniform_mk3",
+    "name": "Rogue Combat Plate",
+    "slot": "body",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 10,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 12,
+    "description": "Full plate carrier worn by elite rogue soldiers. Offers serious protection.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_boots_mk2",
+    "name": "Rogue Assault Boots",
+    "slot": "legs",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 3,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 4,
+    "description": "Mid-tier rogue assault boots offering mobility and ankle protection.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_boots_mk3",
+    "name": "Rogue Elite Boots",
+    "slot": "legs",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 5,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 4,
+    "description": "Elite rogue combat boots with reinforced soles and quick-release buckles.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_armguards_mk2",
+    "name": "Rogue Armored Bracers",
+    "slot": "arms",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 1,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 1.5,
+    "description": "Metal-plated bracers worn by veteran rogue soldiers.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_armguards_mk3",
+    "name": "Rogue Elite Vambraces",
+    "slot": "arms",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 2,
+    "description": "Heavy-duty vambraces issued to elite rogue assault units.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_mask_mk2",
+    "name": "Enemy Combat Visor",
+    "slot": "mask",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 1,
+    "description": "Reinforced combat visor with optical filters. Worn by elite rogue operatives.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_rifle_mk2",
+    "name": "Lyssa Tactical Rifle",
+    "slot": "weapon",
+    "weaponType": "rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 28,
+    "hitRateBonus": 20,
+    "weight": 12,
+    "description": "A mid-tier Lyssa tactical rifle. Harder-hitting and more accurate than the standard sharprifle.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_rifle_mk3",
+    "name": "Lyssa Voidripper Rifle",
+    "slot": "weapon",
+    "weaponType": "rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 40,
+    "hitRateBonus": 28,
+    "weight": 13,
+    "description": "A masterwork Lyssa precision rifle. Near-mythical accuracy in the hands of a champion.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_machine_gun_mk2",
+    "name": "Lyssa Void Suppressor",
+    "slot": "weapon",
+    "weaponType": "machine_gun",
+    "faction": "enemy",
+    "shotsPerRound": 8,
+    "bonuses": [],
+    "damage": 22,
+    "hitRateBonus": -15,
+    "weight": 22,
+    "description": "A devastating Lyssa void-forged machine gun. Tears through formations with relentless burst fire.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_armor_light",
+    "name": "Lyssa Field Coat",
+    "slot": "body",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 6,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 8,
+    "description": "A lighter Lyssa field coat worn by newer operatives before full induction.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_armor_heavy",
+    "name": "Lyssa Void Plate",
+    "slot": "body",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 24,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 6,
+        "stat": "constitution",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "weight": 22,
+    "description": "Void-forged full plate armour worn by Lyssa overlords. An imposing wall of metal.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_boots_light",
+    "name": "Lyssa Patrol Boots",
+    "slot": "legs",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 3,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 3,
+    "description": "Standard patrol boots issued to Lyssa sentinels on perimeter duty.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_boots_heavy",
+    "name": "Lyssa Void Greaves",
+    "slot": "legs",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 12,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 3,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 6,
+    "description": "Heavy void-steel greaves worn by Lyssa champions. Swift despite their mass.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_armguards_light",
+    "name": "Lyssa Field Bracers",
+    "slot": "arms",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 1,
+    "description": "Light arm guards worn by Lyssa field operatives during initial deployments.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_armguards_heavy",
+    "name": "Lyssa Void Vambraces",
+    "slot": "arms",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 8,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 5,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 2.5,
+    "description": "Void-forged vambraces worn by Lyssa overlords. Crushing grip, impenetrable shell.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_mask_enhanced",
+    "name": "Lyssa Void Visor",
+    "slot": "mask",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 6,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 5,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 1.5,
+    "description": "An advanced void-optical visor worn by Lyssa commanders. Sees through smoke, darkness, and fear.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "heroine_shotgun",
+    "name": "Valkyrie Breach Shotgun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "faction": "maiden",
+    "bonuses": [],
+    "damage": 52,
+    "hitRateBonus": -5,
+    "price": 900,
+    "isRare": true,
+    "weight": 12,
+    "description": "A heroine-grade breach shotgun. Devastating stopping power at close range.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "heroine_smg",
+    "name": "Valkyrie Burst SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "faction": "maiden",
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "damage": 18,
+    "hitRateBonus": 18,
+    "shotsPerRound": 3,
+    "price": 850,
+    "isRare": true,
+    "weight": 6,
+    "description": "A heroine-issue three-burst SMG with integrated targeting. Lightning-fast at close quarters.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "heroine_sniper",
+    "name": "Valkyrie Longrifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "maiden",
+    "bonuses": [],
+    "damage": 50,
+    "hitRateBonus": 30,
+    "price": 950,
+    "isRare": true,
+    "weight": 13,
+    "description": "A heroine-grade precision longrifle. Exceptional range and lethality in the hands of a marksman.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "heroine_pistol",
+    "name": "Valkyrie Service Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "maiden",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "damage": 14,
+    "hitRateBonus": 18,
+    "price": 700,
+    "isRare": true,
+    "weight": 3,
+    "description": "A heroine-grade precision sidearm. Lightweight and deadly in skilled hands.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_shotgun",
+    "name": "Lyssa Breach Scatter",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 30,
+    "hitRateBonus": -10,
+    "weight": 10,
+    "description": "A close-quarters scatter weapon favoured by Lyssa enforcers.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_shotgun_mk2",
+    "name": "Lyssa Void Scatter",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 46,
+    "hitRateBonus": -5,
+    "weight": 12,
+    "description": "A void-forged heavy scatter gun used by elite Lyssa commanders. Devastating at close range.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_smg",
+    "name": "Lyssa Operative SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "faction": "enemy",
+    "shotsPerRound": 3,
+    "bonuses": [],
+    "damage": 14,
+    "hitRateBonus": 10,
+    "weight": 6,
+    "description": "A compact burst SMG carried by Lyssa assassins and shadow operatives.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_smg_mk2",
+    "name": "Lyssa Shadow SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "faction": "enemy",
+    "shotsPerRound": 4,
+    "bonuses": [],
+    "damage": 20,
+    "hitRateBonus": 15,
+    "weight": 7,
+    "description": "A void-tuned four-burst SMG wielded by elite Lyssa shadow operatives. Near-silent, utterly lethal.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_sniper",
+    "name": "Lyssa Markrifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 28,
+    "hitRateBonus": 25,
+    "weight": 12,
+    "description": "A precision sniper rifle used by Lyssa long-range specialists.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_sniper_mk2",
+    "name": "Lyssa Void Sniper",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 45,
+    "hitRateBonus": 35,
+    "weight": 14,
+    "description": "A void-forged masterwork sniper rifle. Extreme range, near-perfect accuracy.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_pistol",
+    "name": "Lyssa Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 12,
+    "hitRateBonus": 12,
+    "weight": 3,
+    "description": "A compact sidearm carried by lower-tier Lyssa operatives.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_pistol_mk2",
+    "name": "Lyssa Elite Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 20,
+    "hitRateBonus": 18,
+    "weight": 3,
+    "description": "A void-forged precision sidearm wielded by elite Lyssa commanders.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_sniper",
+    "name": "Rogue Scoped Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 16,
+    "hitRateBonus": 18,
+    "weight": 12,
+    "description": "A basic scoped rifle used by rogue marksmen. Longer range than a standard rifle.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_sniper_mk2",
+    "name": "Rogue Precision Sniper",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 24,
+    "hitRateBonus": 24,
+    "weight": 13,
+    "description": "A mid-tier rogue sniper rifle used by veteran rogue sharpshooters.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "enemy_sniper_mk3",
+    "name": "Rogue Elite Sniper",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 34,
+    "hitRateBonus": 30,
+    "weight": 14,
+    "description": "A high-calibre rogue sniper rifle carried by elite enemy marksmen.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "enemy_pistol",
+    "name": "Rogue Standard Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 9,
+    "hitRateBonus": 8,
+    "weight": 3,
+    "description": "A basic sidearm issued to rogue infantry as a backup weapon.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "enemy_pistol_mk2",
+    "name": "Rogue Combat Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 13,
+    "hitRateBonus": 12,
+    "weight": 3,
+    "description": "A refined rogue combat pistol used by veteran unit leaders.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "enemy_pistol_mk3",
+    "name": "Rogue Elite Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "faction": "enemy",
+    "bonuses": [],
+    "damage": 18,
+    "hitRateBonus": 16,
+    "weight": 3,
+    "description": "A high-precision rogue sidearm carried by elite operatives.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "pistol_basic",
+    "name": "Service Pistol",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "bonuses": [],
+    "damage": 10,
+    "hitRateBonus": 10,
+    "price": 40,
+    "shopTier": 1,
+    "weight": 3,
+    "description": "A standard-issue service pistol. Light, fast, and reliable.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "pistol_standard",
+    "name": "Combat Pistol",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "bonuses": [],
+    "damage": 14,
+    "hitRateBonus": 13,
+    "price": 100,
+    "shopTier": 3,
+    "weight": 3,
+    "description": "A refined combat pistol with improved sights and grip. Favoured by scouts.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "pistol_tactical",
+    "name": "Tactical Pistol",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "bonuses": [],
+    "damage": 18,
+    "hitRateBonus": 15,
+    "price": 220,
+    "shopTier": 5,
+    "weight": 3,
+    "description": "A mid-tier tactical pistol with suppressor mount and extended barrel. Quiet and precise.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "pistol_elite",
+    "name": "Elite Precision Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "damage": 22,
+    "hitRateBonus": 18,
+    "price": 500,
+    "shopTier": 7,
+    "isRare": true,
+    "weight": 3,
+    "description": "A finely engineered precision sidearm. Augments the wielder's reaction time.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "pistol_void",
+    "name": "Void Sidearm",
+    "slot": "weapon",
+    "weaponType": "pistol",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 4,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "damage": 30,
+    "hitRateBonus": 22,
+    "price": 1800,
+    "shopTier": 9,
+    "isRare": true,
+    "weight": 3,
+    "description": "An HQ void-forged sidearm of immense precision. Deadly in expert hands.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "tactical_shotgun",
+    "name": "Tactical Shotgun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "bonuses": [],
+    "damage": 40,
+    "hitRateBonus": -8,
+    "price": 160,
+    "shopTier": 3,
+    "weight": 9,
+    "description": "A mid-grade tactical shotgun with improved choke. Good breach weapon.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "combat_shotgun",
+    "name": "Combat Shotgun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "bonuses": [],
+    "damage": 46,
+    "hitRateBonus": -6,
+    "price": 400,
+    "shopTier": 6,
+    "weight": 10,
+    "description": "A military-grade combat shotgun with full-bore slugs. Brutal stopping power.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "scoped_rifle",
+    "name": "Scoped Marksman Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "bonuses": [],
+    "damage": 22,
+    "hitRateBonus": 20,
+    "price": 120,
+    "shopTier": 2,
+    "weight": 12,
+    "description": "A basic scoped rifle with good accuracy at range. Entry-level precision weapon.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "hunter_rifle",
+    "name": "Hunter's Long Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "bonuses": [],
+    "damage": 35,
+    "hitRateBonus": 26,
+    "price": 320,
+    "shopTier": 5,
+    "weight": 13,
+    "description": "A field-modified long rifle favoured by experienced scouts. High damage and solid accuracy.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "tactical_sniper",
+    "name": "Tactical Sniper Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "bonuses": [],
+    "damage": 45,
+    "hitRateBonus": 30,
+    "price": 680,
+    "shopTier": 7,
+    "weight": 14,
+    "description": "A military-issue sniper rifle with integrated ballistic computer. Exceptional damage and accuracy.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_1",
+    "name": "Void Token",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 1,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.2,
+    "description": "A small void-imbued token carried by Lyssa initiates. Sharpens the senses slightly.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_2",
+    "name": "Shadow Lens",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.3,
+    "description": "A monocular optic used by Lyssa scouts. Extends spotting range in darkness.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_3",
+    "name": "Rogue Crest",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 1,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.3,
+    "description": "An emblazoned crest marking a Lyssa operative's unit affiliation. Boosts fighting spirit.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_4",
+    "name": "Void Crystal",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 2,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.4,
+    "description": "A shard of condensed void energy worn by Lyssa veterans. Enhances both speed and power.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_5",
+    "name": "Lyssa Signet",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 4,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.4,
+    "description": "A signet ring marking a trusted Lyssa officer. Heightens vigilance and battlefield authority.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_6",
+    "name": "Overlord's Relic",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.5,
+    "description": "An ancient relic carried by Lyssa overlords. Radiates suppressive dread that sharpens combat instincts.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_7",
+    "name": "Void Shard Charm",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 3,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 4,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.5,
+    "description": "A tri-shard void charm worn by elite Lyssa commanders. Heightens all combat senses to an unnerving degree.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_8",
+    "name": "Abyss Crystal",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Constitution",
+        "value": 3,
+        "stat": "constitution",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.6,
+    "description": "A dense abyss crystal suffused with dark power. Toughens the wearer and dramatically amplifies striking force.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_9",
+    "name": "Lyssa's Brand",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 5,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 4,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.7,
+    "description": "The personal brand of Lyssa herself, bestowed upon her most favoured champions. A terror-inspiring relic.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_10",
+    "name": "Void Lord's Mark",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 6,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 5,
+        "stat": "dexterity",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 4,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Constitution",
+        "value": 2,
+        "stat": "constitution",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.8,
+    "description": "The rarest emblem of Void Lord status. Every Waelfeld maiden knows what it means to face one who wears this.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_11",
+    "name": "Void Scout Bead",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false },
+      { "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A bead worn by Lyssa scouts on patrol. Sharpens reflexes and situational thinking.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_acc_12",
+    "name": "Iron Night Talisman",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false },
+      { "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A rough iron talisman worn by Lyssa night-runners. Hardens the body and keeps the eyes sharp.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_13",
+    "name": "Rogue Strike Pin",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A pin distributed to Lyssa strike teams. Channels aggression and improves quick-draw speed.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_14",
+    "name": "Shadow Cipher",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false },
+      { "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "An etched cipher disc carried by Lyssa sentinels. Heightens perceptiveness and tactical reading.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_acc_15",
+    "name": "Dark Braid",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A braided cord worn on the wrist by Lyssa initiates. A minor charm for endurance and agility.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_16",
+    "name": "Lyssa Ward",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false },
+      { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A ward-disc engraved with Lyssa doctrine. Steadies the mind and reinforces fighting instincts.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_acc_17",
+    "name": "Void Shard Fragment",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.2,
+    "description": "A tiny fragment of void shard bound to a cord. Spreads a thin dark energy across body and mind.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_acc_18",
+    "name": "Void Coil",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false },
+      { "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.3,
+    "description": "A coiled void-metal bracelet worn by Lyssa veterans. Accelerates reaction speed and battlefield reading.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_19",
+    "name": "Abyssal Scale",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.3,
+    "description": "A scale-shaped piece of abyssal alloy. Toughens the wearer while keeping movement light.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_20",
+    "name": "Shadow Sigil",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false },
+      { "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.3,
+    "description": "A carved sigil used by Lyssa forward scouts. Sharpens perception and tactical instinct simultaneously.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_21",
+    "name": "Night Iron Brand",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.4,
+    "description": "A branded iron charm issued to Lyssa assault operatives. Bolsters raw combat strength and resilience.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_22",
+    "name": "Dusk Crystal",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.3,
+    "description": "A pale dusk-coloured crystal found only in Lyssa-controlled ruins. Grants uncanny alertness.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_23",
+    "name": "Dark Command Token",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false },
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.3,
+    "description": "A token carried by Lyssa squad leaders. Improves command clarity and threat identification.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_24",
+    "name": "Void Combat Mark",
+    "slot": "accessory",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false },
+      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.4,
+    "description": "A tri-mark worn by Lyssa field combatants. Balances physical power, speed, and endurance.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_25",
+    "name": "Void Sentinel",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "A refined optic-charm issued to Lyssa elite sentinels. Dramatically expands threat awareness and targeting.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_26",
+    "name": "Abyss Iron Guard",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "A dense abyssal-iron bangle carried by Lyssa enforcers. Amplifies striking force and physical toughness.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_27",
+    "name": "Night Fang",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "A fang-shaped void charm worn by Lyssa elite. Grants predatory speed and tactical precision.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_28",
+    "name": "Shadow Bulwark",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Constitution", "value": 4, "stat": "constitution", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "A shadow-alloy disc carried by Lyssa hardliners. Exceptional toughness paired with heightened vigilance.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_29",
+    "name": "Triple Void Focus",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "Three interlocking void shards fused into one charm. Elevates combat across strength, speed, and awareness.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_30",
+    "name": "Wraith Command Seal",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.5,
+    "description": "A command seal carried by Lyssa wraith-unit officers. Sharpens aggression and battlefield authority.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_acc_31",
+    "name": "Shadow Precision Crest",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.6,
+    "description": "A tri-engraved crest worn by Lyssa precision specialists. Enhances speed, endurance, and target acquisition.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_32",
+    "name": "Abyssal War Mark",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.6,
+    "description": "A war-mark etched in abyssal alloy. Carried by veteran Lyssa commanders, it radiates calculated menace.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_33",
+    "name": "Void Tyrant's Claw",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 6, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.7,
+    "description": "A claw-shaped void artefact worn by Lyssa tyrant-class operators. Devastating raw power fused with lethal speed.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_34",
+    "name": "Abyssal Apex Lens",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Awareness", "value": 6, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.7,
+    "description": "An apex-tier optic charm from the deepest Lyssa vaults. Grants superhuman target detection and strike response.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_35",
+    "name": "Void Fortress Core",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Constitution", "value": 5, "stat": "constitution", "isPercent": false },
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.8,
+    "description": "A core-shard of solidified void energy. Worn by Lyssa fortress-officers — nigh-unbreakable in body and will.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_36",
+    "name": "Supreme Void Cipher",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strategy", "value": 5, "stat": "strategy", "isPercent": false },
+      { "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.7,
+    "description": "A supreme-cipher disc used by the Lyssa high command. Elevates strategic mastery to an inhuman degree.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_37",
+    "name": "Lyssa's Vanguard Mark",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Dexterity", "value": 5, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.8,
+    "description": "The vanguard mark of Lyssa's personal guard. Those chosen to lead the charge wear this as their highest honour.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_38",
+    "name": "Abyssal Overlord Shard",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 4, "stat": "constitution", "isPercent": false },
+      { "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.8,
+    "description": "A fractured overlord-shard fused into a casing. Towers over ordinary void relics in raw destructive potential.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_acc_39",
+    "name": "Shadow Sovereign",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": 4, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.7,
+    "description": "A sovereign-class charm carried by Lyssa's inner circle. Balanced excellence in speed, power, and command.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_acc_40",
+    "name": "Void Emperor's Relic",
+    "slot": "accessory",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 5, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.9,
+    "description": "A relic of unparalleled void power, carried only by those approaching Lyssa's own might. A legend on the battlefield.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_1",
+    "name": "Void Recruit Pin",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 2,
+        "stat": "charm",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Awarded to newly inducted Lyssa operatives. A small sign of the darkness they have embraced.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_2",
+    "name": "Shadow Service Mark",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 2,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 1,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Recognises sustained service in Lyssa's shadow campaigns. A quiet mark of dependability.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_3",
+    "name": "Shadow Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 3,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for decisive action behind enemy lines. Swift and lethal operatives earn this.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_4",
+    "name": "Void Conduct Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 3,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 2,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Recognises exemplary tactical obedience and execution under Lyssa command.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_5",
+    "name": "Dark Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 4,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "A prestigious dark decoration for exceptional vigilance in service of Lyssa.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_6",
+    "name": "Legion of Shadows",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 4,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 2,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Granted to Lyssa's most capable field commanders. A mark of absolute and celebrated dedication.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_7",
+    "name": "Void Legion Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 5,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 2,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "One of Lyssa's highest honours. Those who bear it are feared and respected across the entire battlefront.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_8",
+    "name": "Champion's Void Seal",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 5,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 3,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Awarded only to Lyssa champions who have personally slain heroines. A terror on any battlefield.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_9",
+    "name": "Grand Void Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 6,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 4,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 3,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 2,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "Near-mythic recognition within Lyssa's forces. Seldom awarded, never forgotten.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_10",
+    "name": "Supreme Void Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Charm",
+        "value": 8,
+        "stat": "charm",
+        "isPercent": false
+      },
+      {
+        "label": "Strength",
+        "value": 5,
+        "stat": "strength",
+        "isPercent": false
+      },
+      {
+        "label": "Awareness",
+        "value": 4,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Strategy",
+        "value": 3,
+        "stat": "strategy",
+        "isPercent": false
+      }
+    ],
+    "weight": 0.1,
+    "description": "The ultimate decoration of the Void Legions. To face one who wears this is to face Lyssa herself.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_11",
+    "name": "Void Watch Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 2, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 1, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for vigilance during Lyssa's night operations. A quiet recognition of alertness and loyalty.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_12",
+    "name": "Shadow Initiate's Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 2, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A cross given to initiates who complete their first shadow op. Marks entry into Lyssa's ranks.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_13",
+    "name": "Lyssa's Devotion Pin",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 3, "stat": "charm", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A simple pin awarded for absolute devotion to the Lyssa cause. Inspires fear in enemies who recognise it.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_14",
+    "name": "Dark Strength Mark",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 1, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A stamped mark for demonstrated physical superiority in Lyssa's trials.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_medal_15",
+    "name": "Night Tactics Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 2, "stat": "charm", "isPercent": false },
+      { "label": "Strategy", "value": 1, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for sound tactical judgement on a night operation. Quiet authority among Lyssa's lower ranks.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_16",
+    "name": "Void Endurance Pin",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 2, "stat": "charm", "isPercent": false },
+      { "label": "Constitution", "value": 1, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Recognises extraordinary endurance in extended Lyssa campaigns. Body and resolve hardened together.",
+    "quantity": null,
+    "rarityValue": 1
+  },
+  {
+    "id": "lyssa_medal_17",
+    "name": "Shadow Valor Pin",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 3, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A pin for showing bravery under fire in service to Lyssa. A step above the recruit marks.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "lyssa_medal_18",
+    "name": "Void Field Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 4, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for decisive field action in Lyssa's mid-tier operations. Swift operators earn this.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_19",
+    "name": "Dark Command Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 4, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Recognises commanding presence and power during a Lyssa mid-level assault. Feared by prisoners.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_20",
+    "name": "Void Guard Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 4, "stat": "charm", "isPercent": false },
+      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Given to Lyssa guard officers who held a position under sustained fire. Marks steadfast defence.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_21",
+    "name": "Shadow Watchman's Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 3, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false },
+      { "label": "Strength", "value": 1, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded to vigilant watchmen in Lyssa's shadow network. Alertness and reliable aggression recognised.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_22",
+    "name": "Void Assault Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 5, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for leading a successful void assault against a fortified position. Notable intimidation factor.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_23",
+    "name": "Night Operations Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 3, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Recognition for repeated success in Lyssa's nocturnal raids. Strength and alertness both honoured.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_24",
+    "name": "Lyssa's Commendation",
+    "slot": "medal",
+    "faction": "enemy",
+    "bonuses": [
+      { "label": "Charm", "value": 4, "stat": "charm", "isPercent": false },
+      { "label": "Strategy", "value": 2, "stat": "strategy", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A direct commendation from Lyssa's command structure. The bearer is a trusted mid-level operative.",
+    "quantity": null,
+    "rarityValue": 3
+  },
+  {
+    "id": "lyssa_medal_25",
+    "name": "Void Grand Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 6, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "One of the grand stars of the Void Legions. Bestowed for exceptional battlefield leadership.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_26",
+    "name": "Shadow Valor Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 5, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for extraordinary valour in close-quarters shadow engagements. A combination of ferocity and poise.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_27",
+    "name": "Dark Champion Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 6, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Constitution", "value": 2, "stat": "constitution", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The champion star of Lyssa's dark order. Its bearer has bested opponents of greater number and quality.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_28",
+    "name": "Void Prestige Seal",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 5, "stat": "charm", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A prestige seal for Lyssa's foremost tacticians. Strategy and battlefield reading raised to an elite level.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_29",
+    "name": "Night Elite Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 6, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The elite cross of Lyssa's night divisions. Its bearers are the fastest and most lethal of Lyssa's forces.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_30",
+    "name": "Lyssa Excellence Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 5, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A star awarded for all-round excellence in Lyssa's service. Vigilance and swift execution both exemplary.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_31",
+    "name": "Shadow Lord's Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 6, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Bestowed upon shadow-lords who command entire battalions of Lyssa's forces. Fear and command in one.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_32",
+    "name": "Abyssal Honor Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 5, "stat": "charm", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 2, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "An honour medal from the Abyss Division of Lyssa's forces. Resilience and killing power both fully developed.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "lyssa_medal_33",
+    "name": "Grand Void Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 7, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The grand star of the Void Legions — seldom awarded and always feared. Its bearer has surpassed nearly all.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_34",
+    "name": "Lyssa's Exalt",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 8, "stat": "charm", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 3, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A personal exaltation from Lyssa, marking extraordinary speed and ferocity in her service.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_35",
+    "name": "Supreme Shadow Cross",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 7, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 4, "stat": "awareness", "isPercent": false },
+      { "label": "Strategy", "value": 3, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The supreme cross of the shadow order. A near-mythic decoration among Lyssa's strategic commanders.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_36",
+    "name": "Void Supreme Valor",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 8, "stat": "charm", "isPercent": false },
+      { "label": "Constitution", "value": 4, "stat": "constitution", "isPercent": false },
+      { "label": "Strength", "value": 4, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "Awarded for supreme acts of valour bordering on the impossible. The recipient is an icon of Lyssa's might.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_37",
+    "name": "Shadow Overlord Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 7, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The overlord star of the shadow divisions. Wearer has demonstrated absolute mastery of offensive warfare.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_38",
+    "name": "Abyssal Supreme Star",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 9, "stat": "charm", "isPercent": false },
+      { "label": "Awareness", "value": 5, "stat": "awareness", "isPercent": false },
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The supreme star of the Abyss Division. Its tremendous charm effect terrorises entire enemy formations.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_39",
+    "name": "Lyssa's Sovereign Medal",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 8, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 5, "stat": "strength", "isPercent": false },
+      { "label": "Strategy", "value": 4, "stat": "strategy", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "A sovereign medal from Lyssa herself. Marks the bearer as one of her chosen commanders — absolute authority.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "lyssa_medal_40",
+    "name": "Void Absolute Crown",
+    "slot": "medal",
+    "faction": "enemy",
+    "isRare": true,
+    "bonuses": [
+      { "label": "Charm", "value": 8, "stat": "charm", "isPercent": false },
+      { "label": "Strength", "value": 6, "stat": "strength", "isPercent": false },
+      { "label": "Dexterity", "value": 4, "stat": "dexterity", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false },
+      { "label": "Awareness", "value": 3, "stat": "awareness", "isPercent": false }
+    ],
+    "weight": 0.1,
+    "description": "The absolute crown of the Void Legions. No medal in Lyssa's arsenal exceeds this. To face its bearer is to face doom.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "field_shotgun",
+    "name": "Field Shotgun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "rarityValue": 1,
+    "bonuses": [],
+    "damage": 16,
+    "hitRateBonus": -15,
+    "price": 50,
+    "shopTier": 1,
+    "weight": 7,
+    "description": "A basic break-action shotgun. Simple and reliable at close range.",
     "quantity": null
+  },
+  {
+    "id": "field_smg",
+    "name": "Field SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "rarityValue": 1,
+    "bonuses": [],
+    "damage": 8,
+    "hitRateBonus": 5,
+    "shotsPerRound": 2,
+    "price": 60,
+    "shopTier": 1,
+    "weight": 4,
+    "description": "A lightweight 2-burst submachine gun. Easy to use, effective at short range.",
+    "quantity": null
+  },
+  {
+    "id": "basic_sniper",
+    "name": "Basic Sniper Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "rarityValue": 1,
+    "bonuses": [],
+    "damage": 14,
+    "hitRateBonus": 5,
+    "price": 70,
+    "shopTier": 1,
+    "weight": 10,
+    "description": "An entry-level scoped rifle. Longer range than a standard rifle but lacks power.",
+    "quantity": null
+  },
+  {
+    "id": "scouting_kit",
+    "name": "Scouting Kit",
+    "slot": "accessory",
+    "rarityValue": 1,
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 2,
+        "stat": "awareness",
+        "isPercent": false
+      }
+    ],
+    "price": 40,
+    "shopTier": 1,
+    "weight": 0.5,
+    "description": "A basic field scouting kit with map and compass. Sharpens situational awareness.",
+    "quantity": null
+  },
+  {
+    "id": "field_sniper",
+    "name": "Field Sniper Rifle",
+    "slot": "weapon",
+    "weaponType": "sniper_rifle",
+    "rarityValue": 2,
+    "bonuses": [],
+    "damage": 20,
+    "hitRateBonus": 12,
+    "price": 180,
+    "shopTier": 3,
+    "weight": 12,
+    "description": "A serviceable bolt-action sniper rifle issued to scout units.",
+    "quantity": null
+  },
+  {
+    "id": "field_boots_standard",
+    "name": "Field Boots",
+    "slot": "legs",
+    "rarityValue": 2,
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 2,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "price": 90,
+    "shopTier": 2,
+    "weight": 3,
+    "description": "Reinforced field boots with ankle support. Better than basic combat boots.",
+    "quantity": null
+  },
+  {
+    "id": "assault_cannon",
+    "name": "Assault Cannon",
+    "slot": "weapon",
+    "weaponType": "machine_gun",
+    "rarityValue": 3,
+    "bonuses": [],
+    "damage": 14,
+    "hitRateBonus": -40,
+    "shotsPerRound": 7,
+    "price": 420,
+    "craftable": true,
+    "craftTier": 3,
+    "craftCost": {
+      "money": 160,
+      "wood": 0,
+      "metal": 120
+    },
+    "weight": 22,
+    "description": "A 7-round burst cannon. Each shot resolved independently — capable of shredding lightly armoured groups.",
+    "quantity": null
+  },
+  {
+    "id": "combat_optics",
+    "name": "Combat Optics",
+    "slot": "accessory",
+    "rarityValue": 3,
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 6,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 1,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "price": 400,
+    "shopTier": 5,
+    "weight": 1,
+    "description": "Advanced multi-lens optics. Sharply improves situational awareness and reaction speed.",
+    "quantity": null
+  },
+  {
+    "id": "tactical_visor",
+    "name": "Tactical Visor",
+    "slot": "head",
+    "rarityValue": 4,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Awareness",
+        "value": 8,
+        "stat": "awareness",
+        "isPercent": false
+      },
+      {
+        "label": "HP",
+        "value": 4,
+        "stat": "hp",
+        "isPercent": false
+      }
+    ],
+    "price": 1200,
+    "shopTier": 8,
+    "weight": 2,
+    "description": "A high-tech combat visor with multiple optical modes. Outstanding threat detection.",
+    "quantity": null
+  },
+  {
+    "id": "siege_shotgun",
+    "name": "Siege Shotgun",
+    "slot": "weapon",
+    "weaponType": "shotgun",
+    "rarityValue": 5,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Strength",
+        "value": 5,
+        "stat": "strength",
+        "isPercent": false
+      }
+    ],
+    "damage": 72,
+    "hitRateBonus": -15,
+    "price": 4200,
+    "shopTier": 10,
+    "weight": 16,
+    "description": "A legendary HQ-engineered siege shotgun. One blast can drop even the most fortified enemy at close range.",
+    "quantity": null
+  },
+  {
+    "id": "tempest_smg",
+    "name": "Tempest SMG",
+    "slot": "weapon",
+    "weaponType": "smg",
+    "rarityValue": 5,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "Dexterity",
+        "value": 4,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "damage": 22,
+    "hitRateBonus": 20,
+    "shotsPerRound": 4,
+    "price": 4800,
+    "shopTier": 10,
+    "weight": 8,
+    "description": "A legendary 4-burst SMG with lethal accuracy. Favoured by the most agile elite operatives.",
+    "quantity": null
+  },
+  {
+    "id": "battle_greaves",
+    "name": "Battle Greaves",
+    "slot": "legs",
+    "rarityValue": 5,
+    "isRare": true,
+    "bonuses": [
+      {
+        "label": "HP",
+        "value": 8,
+        "stat": "hp",
+        "isPercent": false
+      },
+      {
+        "label": "Dexterity",
+        "value": 4,
+        "stat": "dexterity",
+        "isPercent": false
+      }
+    ],
+    "price": 4000,
+    "shopTier": 10,
+    "weight": 6,
+    "description": "Legendary HQ battle greaves. The pinnacle of leg armour — exceptional speed and protection.",
+    "quantity": null
+  },
+  {
+    "id": "maiden_dress_reinforced",
+    "name": "Reinforced Field Dress",
+    "slot": "body",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 6, "stat": "hp", "isPercent": false }
+    ],
+    "price": 0,
+    "weight": 4,
+    "description": "A reinforced-weave field dress with added padding. More protection than the standard issue.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "maiden_boots_reinforced",
+    "name": "Reinforced Marching Greaves",
+    "slot": "legs",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 3, "stat": "hp", "isPercent": false },
+      { "label": "Dexterity", "value": 1, "stat": "dexterity", "isPercent": false }
+    ],
+    "price": 0,
+    "weight": 4,
+    "description": "Greaves with reinforced ankle plates and extra padding. Improved mobility over standard issue.",
+    "quantity": null,
+    "rarityValue": 2
+  },
+  {
+    "id": "maiden_dress_elite",
+    "name": "Elite Combat Dress",
+    "slot": "body",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 14, "stat": "hp", "isPercent": false },
+      { "label": "Constitution", "value": 3, "stat": "constitution", "isPercent": false }
+    ],
+    "price": 0,
+    "isRare": true,
+    "weight": 6,
+    "description": "Command-grade combat dress engineered for elite operatives. Exceptional durability and constitution support.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "maiden_boots_elite",
+    "name": "Elite War Greaves",
+    "slot": "legs",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 8, "stat": "hp", "isPercent": false },
+      { "label": "Dexterity", "value": 2, "stat": "dexterity", "isPercent": false }
+    ],
+    "price": 0,
+    "isRare": true,
+    "weight": 4,
+    "description": "High-grade greaves for frontline elites. Balanced between protection and speed.",
+    "quantity": null,
+    "rarityValue": 4
+  },
+  {
+    "id": "maiden_dress_apex",
+    "name": "Apex Battle Dress",
+    "slot": "body",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 20, "stat": "hp", "isPercent": false },
+      { "label": "Constitution", "value": 4, "stat": "constitution", "isPercent": false },
+      { "label": "Strength", "value": 2, "stat": "strength", "isPercent": false }
+    ],
+    "price": 0,
+    "isRare": true,
+    "weight": 7,
+    "description": "The pinnacle of Waelfeld craftsmanship. Only the most proven maidens wear this legendary garment.",
+    "quantity": null,
+    "rarityValue": 5
+  },
+  {
+    "id": "maiden_boots_apex",
+    "name": "Apex War Greaves",
+    "slot": "legs",
+    "faction": "maiden",
+    "bonuses": [
+      { "label": "HP", "value": 11, "stat": "hp", "isPercent": false },
+      { "label": "Dexterity", "value": 3, "stat": "dexterity", "isPercent": false }
+    ],
+    "price": 0,
+    "isRare": true,
+    "weight": 5,
+    "description": "Legendary-tier greaves. The culmination of Waelfeld arms science — swift, resilient, and unmistakable.",
+    "quantity": null,
+    "rarityValue": 5
   }
 ]

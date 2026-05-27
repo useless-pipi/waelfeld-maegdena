@@ -28,4 +28,6 @@ export interface Enemy {
   expData?: ExpData;
   /** Permanent morale bonus (for enemies) */
   moralePermanentBonus?: number;
+  /** Combat quality 1–10, stamped at creation time. */
+  quality?: number;
 }

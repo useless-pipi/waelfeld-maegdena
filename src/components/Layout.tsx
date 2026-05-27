@@ -11,13 +11,16 @@ const NAV_LINKS = [
   { to: '/buildings', label: '🏗️ Buildings' },
   { to: '/equipment', label: '🎒 Equipment' },
   { to: '/save', label: '💾 Save' },  { to: '/rules', label: '📖 Rules' },
-  { to: '/balance', label: '⚖️ Balance' },  { to: '/credits', label: '📜 Credits' },
+  { to: '/credits', label: '📜 Credits' },
   { to: '/ruleengine', label: '🤖 Rule Engine' },
+  { to: '/settings', label: '⚙️ Settings' },
 ];
 
 if (!import.meta.env.PROD) {
   NAV_LINKS.push({ to: '/admin', label: '🔧 Admin' });
   NAV_LINKS.push({ to: '/devanalysis', label: '🔬 Dev Analysis' });
+  NAV_LINKS.push({ to: '/balance', label: '⚖️ Balance' });
+  NAV_LINKS.push({ to: '/threatreview', label: '🧪 Threat Review' });
 }
 
 export default function Layout() {
@@ -29,7 +32,7 @@ export default function Layout() {
   const isHome = location.pathname === '/';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
+    <div style={{ display: 'flex', width: '100%', minHeight: '100vh', background: 'var(--color-bg)' }}>
       {/* Sidebar */}
       <aside style={{
         display: isHome ? 'none' : 'flex',
@@ -93,7 +96,7 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflowY: isHome ? 'hidden' : 'auto', padding: isHome ? 0 : 24, minHeight: '100vh' }}>
+      <main style={{ flex: 1, minWidth: 0, overflowY: isHome ? 'hidden' : 'auto', padding: isHome ? 0 : 24, minHeight: '100vh' }}>
         <Outlet />
       </main>
     </div>

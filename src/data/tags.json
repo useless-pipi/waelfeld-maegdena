@@ -5,7 +5,7 @@
     "category": "positive",
     "isRecruit": false,
     "description": "A unique named individual of exceptional capability. Heroines are irreplaceable — losing one is a permanent blow to the unit.",
-    "bonuses": [],
+    "bonuses": [{ "label": "HP", "value": 25, "stat": "hp", "isPercent": true }],
     "ability": null
   },
   {
@@ -422,7 +422,7 @@
     "category": "positive",
     "isRecruit": false,
     "description": "An ancient undying warrior. Cannot be killed — she is pinned to 1 HP when brought low and becomes stunned.",
-    "bonuses": [],
+    "bonuses": [{ "label": "HP", "value": 25, "stat": "hp", "isPercent": true }],
     "ability": "lyssa_undying"
   },
   {

@@ -1,13 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ReactDOM from 'react-dom';
 import { useGameStore } from '../store/gameStore';
 import { simulateStage, computePersonalMoraleBase, getStat, type StageOutcome, type CombatEvent, type ExpGain } from '../engine/combat';
 import { computeForceStrengthIndex, TIER_CONFIGS } from '../engine/missionGen';
 import type { Maiden } from '../types/maiden';
+import type { Equipment } from '../types/equipment';
 import { getUnitIcon, getMaidenIcon } from '../utils/portraits';
 import { HEROINE_DEFINITIONS } from '../data/heroines';
-import { heroineDefToMaiden } from '../engine/recruit';
+import { heroineDefToMaiden, recruitMaiden, enrichRecruitGear, computeFullMaxHp } from '../engine/recruit';
 import { initializeStageEnemies, enrichEnemyGear } from '../engine/missionGen';
+import equipmentData from '../data/equipment.json';
+
+const allEquipment = (equipmentData as Equipment[]).filter(e => !(e as any).faction);
+const _BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 // ── Battle-speed cookie ───────────────────────────────────────────────────────
 const SPEED_COOKIE = 'wm_battle_speed';
@@ -28,6 +34,182 @@ function writeSpeedCookie(speed: 1 | 2 | 4 | 8) {
   document.cookie = `${SPEED_COOKIE}=${speed}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`;
 }
 
+// ── Auto-equip ────────────────────────────────────────────────────────────────
+const AUTO_EQUIP_SLOTS = ['weapon','head','mask','body','arms','legs','accessory','medal','potion','ration','grenade'] as const;
+type AutoEquipSlot = typeof AUTO_EQUIP_SLOTS[number];
+type AutoEquipConfig = Record<AutoEquipSlot, boolean>;
+
+const AE_LS_KEY = 'wm_auto_equip_v2';
+const AE_SLOT_LABELS: Record<AutoEquipSlot, string> = {
+  weapon: '🔫 Weapon', head: '⛑️ Head', mask: '🎭 Mask', body: '🥋 Body',
+  arms: '🧤 Arms', legs: '👢 Legs', accessory: '🔭 Accessory', medal: '🏅 Medal',
+  potion: '💊 Potions', ration: '🍖 Rations', grenade: '💣 Grenades',
+};
+
+function loadAutoEquipConfig(): AutoEquipConfig {
+  try {
+    const raw = localStorage.getItem(AE_LS_KEY);
+    if (raw) return JSON.parse(raw) as AutoEquipConfig;
+  } catch { /* ignore */ }
+  // Default: all off
+  return Object.fromEntries(AUTO_EQUIP_SLOTS.map(s => [s, false])) as AutoEquipConfig;
+}
+
+function saveAutoEquipConfig(cfg: AutoEquipConfig) {
+  localStorage.setItem(AE_LS_KEY, JSON.stringify(cfg));
+}
+
+/** Score an equipment item for auto-equip comparison (higher = better). */
+function rateItem(item: Equipment): number {
+  let score = 0;
+  for (const b of (item.bonuses ?? [])) {
+    const val = b.isPercent ? b.value * 0.5 : b.value;
+    switch (b.stat) {
+      case 'hp':           score += val * 1.0; break;
+      case 'strength':     score += val * 2.0; break;
+      case 'dexterity':    score += val * 2.0; break;
+      case 'constitution': score += val * 2.0; break;
+      case 'awareness':    score += val * 1.5; break;
+      case 'strategy':     score += val * 1.5; break;
+      case 'charm':        score += val * 1.0; break;
+      case 'hitRate':      score += val * 1.5; break;
+      case 'dodge':        score += val * 1.5; break;
+      default:             score += val;
+    }
+  }
+  if (item.slot === 'weapon') {
+    score += (item.damage ?? 0) * 2;
+    score += ((item.shotsPerRound ?? 1) - 1) * 5;
+    score += (item.hitRateBonus ?? 0) * 0.5;
+  }
+  return score;
+}
+
+type ConsumableCategory = 'potion' | 'ration' | 'grenade';
+function consumableCategory(item: Equipment): ConsumableCategory | null {
+  if (item.slot !== 'consumable') return null;
+  if (item.healPercent != null) return 'potion';
+  if (item.rationMoraleBonus != null || item.rationHpBonus != null) return 'ration';
+  if ((item as any).weaponType === 'grenade' || item.burstPercent != null) return 'grenade';
+  return null;
+}
+
+/**
+ * Compute the auto-equip changes for a set of deploying maidens.
+ * Returns updated maiden equipment arrays and which inventory item ids to remove from stock.
+ */
+function autoEquipForMission(
+  deployingMaidens: Maiden[],
+  inventory: Equipment[],
+  cfg: AutoEquipConfig,
+  stageCount: number,
+): { updatedMaidens: { id: string; equipment: Equipment[]; maxHp: number; currentHp: number }[]; removedInventoryIds: string[] } {
+  // Work on clones — shared inventory pool shrinks as items are assigned
+  // Priority order: heroines first (in any order), then zakos by charm descending
+  const workMaidens = [...deployingMaidens]
+    .sort((a, b) => {
+      const aH = a.type === 'heroine' ? 0 : 1;
+      const bH = b.type === 'heroine' ? 0 : 1;
+      if (aH !== bH) return aH - bH;
+      return (b.stats.charm ?? 0) - (a.stats.charm ?? 0);
+    })
+    .map(m => ({ id: m.id, equipment: [...m.equipment], maxHp: m.maxHp, currentHp: m.currentHp, stats: m.stats }));
+  let workInventory: Equipment[] = inventory
+    .filter(i => i.inventoryId && i.faction !== 'enemy')
+    .map(i => ({ ...i }));
+  const removedInventoryIds: string[] = [];
+
+  const removeFromInv = (invId: string) => {
+    const idx = workInventory.findIndex(i => i.inventoryId === invId);
+    if (idx !== -1) { workInventory.splice(idx, 1); removedInventoryIds.push(invId); }
+  };
+
+  for (const m of workMaidens) {
+    const getWeight = () => m.equipment.reduce((s, e) => s + (e.weight ?? 0), 0);
+    const getMaxWeight = () => {
+      const str = m.stats.strength + m.equipment.reduce((s, e) =>
+        s + (e.bonuses ?? []).filter(b => b.stat === 'strength').reduce((ss, b) => ss + b.value, 0), 0);
+      return 20 + 5 * str;
+    };
+    const canFit = (item: Equipment) => getWeight() + (item.weight ?? 0) <= getMaxWeight();
+
+    // ── Exclusive slots ────────────────────────────────────────────────────────
+    for (const slot of ['weapon','head','mask','body','arms','legs'] as AutoEquipSlot[]) {
+      if (!cfg[slot]) continue;
+      const candidates = workInventory.filter(i => i.slot === slot);
+      if (candidates.length === 0) continue;
+      const best = candidates.reduce((a, b) => rateItem(b) > rateItem(a) ? b : a);
+      const current = m.equipment.find(e => e.slot === slot);
+      if (current && rateItem(best) <= rateItem(current)) continue; // already has better or equal
+      // Compute post-swap effective STR (same logic as gameStore.equipItem)
+      const currentStrBonus = m.equipment.reduce((s, e) =>
+        s + (e.bonuses ?? []).filter(b => b.stat === 'strength').reduce((ss, b) => ss + b.value, 0), 0);
+      const displacedStrBonus = current
+        ? (current.bonuses ?? []).filter(b => b.stat === 'strength').reduce((s, b) => s + b.value, 0)
+        : 0;
+      const bestStrBonus = (best.bonuses ?? []).filter(b => b.stat === 'strength').reduce((s, b) => s + b.value, 0);
+      const postSwapStr = m.stats.strength + currentStrBonus - displacedStrBonus + bestStrBonus;
+      const postSwapMax = 20 + 5 * postSwapStr;
+      const removed = current ? (current.weight ?? 0) : 0;
+      const newW = getWeight() - removed + (best.weight ?? 0);
+      if (newW > postSwapMax) continue; // would exceed post-swap capacity
+      removeFromInv(best.inventoryId!);
+      if (current) workInventory.push({ ...current }); // displaced goes back to pool
+      m.equipment = m.equipment.filter(e => e.slot !== slot);
+      m.equipment.push({ ...best });
+    }
+
+    // ── Accessories ────────────────────────────────────────────────────────────
+    if (cfg['accessory']) {
+      const pool = workInventory.filter(i => i.slot === 'accessory').sort((a, b) => rateItem(b) - rateItem(a));
+      for (const item of pool) {
+        if (!canFit(item)) continue;
+        removeFromInv(item.inventoryId!);
+        m.equipment.push({ ...item });
+      }
+    }
+
+    // ── Medals ─────────────────────────────────────────────────────────────────
+    if (cfg['medal']) {
+      const pool = workInventory.filter(i => i.slot === 'medal').sort((a, b) => ((b as any).medalRarity ?? 0) - ((a as any).medalRarity ?? 0));
+      for (const item of pool) {
+        if (!canFit(item)) continue;
+        removeFromInv(item.inventoryId!);
+        m.equipment.push({ ...item });
+      }
+    }
+
+    // ── Consumables ────────────────────────────────────────────────────────────
+    const consumableFlagMap: Record<ConsumableCategory, AutoEquipSlot> = {
+      potion: 'potion', ration: 'ration', grenade: 'grenade',
+    };
+    for (const cat of ['potion','ration','grenade'] as ConsumableCategory[]) {
+      if (!cfg[consumableFlagMap[cat]]) continue;
+      const alreadyHave = m.equipment.filter(e => consumableCategory(e as Equipment) === cat).length;
+      const need = Math.max(0, stageCount - alreadyHave);
+      if (need === 0) continue;
+      const pool = workInventory
+        .filter(i => consumableCategory(i) === cat)
+        .sort((a, b) => rateItem(b) - rateItem(a));
+      let taken = 0;
+      for (const item of pool) {
+        if (taken >= need) break;
+        if (!canFit(item)) continue;
+        removeFromInv(item.inventoryId!);
+        m.equipment.push({ ...item });
+        taken++;
+      }
+    }
+
+    // Recompute maxHp / currentHp using the full formula (flat + percent bonuses from all sources)
+    const originalMaiden = deployingMaidens.find(d => d.id === m.id)!;
+    m.maxHp = computeFullMaxHp(originalMaiden.stats.constitution, m.equipment as Equipment[], originalMaiden.qualifications as any[], originalMaiden.tags as any[]);
+    m.currentHp = Math.min(originalMaiden.currentHp + Math.max(0, m.maxHp - originalMaiden.maxHp), m.maxHp);
+  }
+
+  return { updatedMaidens: workMaidens, removedInventoryIds };
+}
+
 interface MissionState {
   missionId: string | null;
   inProgress: boolean;
@@ -41,12 +223,20 @@ interface MissionState {
 
 export default function Missions() {
   const { missions, teams, maidens, setMaiden, setMission, setTeam, addMaiden, setCombatLocked, setMBase,
+    removeInventoryItem, autoRecruit, setAutoRecruit,
     healInjuredMaidens, awardTrainingExp, applyPracticalExpGains, applyMoraleGains, applyMoraleQuitEvents, postMissionReset, rescueCapturedMaidens, refreshMissions,
-    recordMeridianMission, applyMeridianSupport } = useGameStore();
+    recordMeridianMission, applyMeridianSupport, decrementMissionsUntilWave, completeLyssaWave, incrementFreeRecruit } = useGameStore();
   const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
+  const [hoveredMission, setHoveredMission] = useState<any | null>(null);
   const [combatSpeed, setCombatSpeed] = useState<1 | 2 | 4 | 8>(() => readSpeedCookie());
   // Accumulate enemy kills across stages for Meridian reporting
   const missionKillsRef = useRef(0);
+  // Track whether the last mission ended in victory (for lyssa wave handling)
+  const missionWonRef = useRef(false);
+  // Percentage of resources lost to a lyssa wave raid (null = no raid this session)
+  const [lyssaRaidPercent, setLyssaRaidPercent] = useState<number | null>(null);
+  const missionsUntilNextWave = useGameStore(s => s.missionsUntilNextWave ?? 20);
+  const consecutiveEasyMissions = useGameStore(s => s.consecutiveEasyMissions ?? 0);
 
   // Generate missions only when the list is empty (app startup / after a mission concludes)
   useEffect(() => { if (missions.length === 0) refreshMissions(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -68,10 +258,35 @@ export default function Missions() {
 
   // enrichEnemyGear is the canonical implementation in missionGen.ts — imported above.
 
-  function startMission(teamId: string, autoTradeFood = false) {
+  function startMission(teamId: string, autoTradeFood = false, autoEquipCfg?: AutoEquipConfig) {
     if (!selectedMission || !teamId) return;
     const maidenTeam = teams.find(t => t.id === teamId);
     if (!maidenTeam) return;
+
+    // ── Auto-equip: apply before deriving stageMaidens so changes are reflected ──
+    if (autoEquipCfg && Object.values(autoEquipCfg).some(Boolean)) {
+      const currentState = useGameStore.getState();
+      const deployingIds = new Set(
+        maidenTeam.memberIds.filter(id => {
+          const m = currentState.maidens.find((m: Maiden) => m.id === id);
+          return m && !m.isCaptured && !m.isFallen && m.currentHp > 0 && m.moraleQuitStatus !== 'escaped';
+        })
+      );
+      const deployingMaidens = currentState.maidens.filter((m: Maiden) => deployingIds.has(m.id));
+      const { updatedMaidens, removedInventoryIds } = autoEquipForMission(
+        deployingMaidens,
+        currentState.inventory,
+        autoEquipCfg,
+        selectedMission.stages.length,
+      );
+      for (const u of updatedMaidens) {
+        const orig = deployingMaidens.find((m: Maiden) => m.id === u.id)!;
+        const changed = orig.equipment.length !== u.equipment.length ||
+          orig.equipment.some((e, i) => e.inventoryId !== u.equipment[i]?.inventoryId);
+        if (changed) setMaiden(u.id, { equipment: u.equipment, maxHp: u.maxHp, currentHp: u.currentHp });
+      }
+      for (const invId of removedInventoryIds) removeInventoryItem(invId);
+    }
 
     // Double-check: exclude any maiden who is captured, fallen, or has escaped
     const stageMaidens = maidens.filter(
@@ -144,7 +359,7 @@ export default function Missions() {
     });
   }
 
-  function applyPostMissionEffects(deployedMaidenIds: string[], missionKills: number) {
+  function applyPostMissionEffects(deployedMaidenIds: string[], missionKills: number, isWin: boolean) {
     const hospitalBuilding = useGameStore.getState().buildings.find(b => b.id === 'field_hospital');
     if (hospitalBuilding && hospitalBuilding.isConstructed) {
       const lvDef = hospitalBuilding.levels[hospitalBuilding.currentLevel - 1];
@@ -179,15 +394,139 @@ export default function Missions() {
         deaths: missionDeaths,
         deployedCount: deployedMaidenIds.length,
         difficulty: activeMissionForRecord?.difficulty ?? 'normal',
-        isWin: missionKills > 0 || missionDeaths < deployedMaidenIds.length,
+        isWin,
       });
       applyMeridianSupport(tier);
     }
+    // Rosarium Vocis: chance for a free recruit on victory
+    if (isWin) {
+      const rosariumBuilding = useGameStore.getState().buildings.find(b => b.id === 'rosarium_vocis');
+      if (rosariumBuilding && rosariumBuilding.isConstructed && rosariumBuilding.currentLevel > 0) {
+        const lvDef = rosariumBuilding.levels[rosariumBuilding.currentLevel - 1];
+        const chance: number = (lvDef?.effectValue as any)?.freeRecruitChance ?? 0;
+        if (chance > 0 && Math.random() < chance) {
+          incrementFreeRecruit();
+        }
+      }
+    }
+  }
+
+  function handleAbortMission(escapedIds: string[] = [], capturedIds: string[] = []) {
+    // Apply any morale captures/escapes that happened in the last completed stage
+    // (these are only passed by the abort button, which fires before onStageComplete)
+    if (escapedIds.length > 0 || capturedIds.length > 0) {
+      applyMoraleQuitEvents(escapedIds, capturedIds);
+    }
+    // Apply all non-win-gated post-mission effects (farm, training EXP, hospital, Meridian payout)
+    const abortedMaidenIds = missionState.stageMaidens.map((m: any) => m.id);
+    applyPostMissionEffects(abortedMaidenIds, missionKillsRef.current, false);
+    handleReturnToMissions();
   }
 
   function handleReturnToMissions() {
+    const wasWin = missionWonRef.current;
+    missionWonRef.current = false;
+    const isLyssaWave = activeMission?.rewardFocus === 'lyssa_wave';
+
+    // Lyssa wave defeated / aborted — raid the base for 25–75% of all resources
+    if (isLyssaWave && !wasWin) {
+      const raidFraction = 0.25 + Math.random() * 0.5;
+      const state = useGameStore.getState();
+      const mb = state.mbase;
+      setMBase({
+        money: Math.floor(mb.money * (1 - raidFraction)),
+        food:  Math.floor((mb.food  ?? 0) * (1 - raidFraction)),
+        wood:  Math.floor((mb.wood  ?? 0) * (1 - raidFraction)),
+        metal: Math.floor((mb.metal ?? 0) * (1 - raidFraction)),
+      });
+      // Maidens remaining in the base must attempt to escape the Lyssa onslaught.
+      // Each non-deployed, non-fallen, non-already-captured maiden has a 50/50 chance:
+      // captured by the Lyssas, or barely escaping and returning later.
+      const deployedInWave = new Set(missionState.stageMaidens.map((m: any) => m.id));
+      const homeMaidens = state.maidens.filter(
+        m => !m.isFallen && !m.isCaptured && !deployedInWave.has(m.id)
+      );
+      const escapedIds: string[] = [];
+      const capturedIds: string[] = [];
+      for (const m of homeMaidens) {
+        if (Math.random() < 0.5) capturedIds.push(m.id);
+        else escapedIds.push(m.id);
+      }
+      if (escapedIds.length > 0 || capturedIds.length > 0) {
+        state.applyMoraleQuitEvents(escapedIds, capturedIds);
+      }
+      setLyssaRaidPercent(Math.round(raidFraction * 100));
+    }
+
+    // Factory pipeline: produce consumables after every mission
+    {
+      const state = useGameStore.getState();
+      const factoryBuilding = state.buildings.find((b: any) => b.id === 'factory');
+      const factoryTier: number = factoryBuilding?.currentLevel ?? 0;
+      const PIPELINE: Record<number, { potionId: string; potions: number; rationId: string; rations: number; grenadeId: string; grenades: number }> = {
+        1: { potionId: 'healing_potion',   potions: 10,  rationId: 'field_rations',     rations: 5,   grenadeId: 'frag_grenade',       grenades: 5  },
+        2: { potionId: 'field_potion',     potions: 20,  rationId: 'improved_rations',  rations: 10,  grenadeId: 'concussion_grenade', grenades: 10 },
+        3: { potionId: 'field_potion',     potions: 50,  rationId: 'improved_rations',  rations: 20,  grenadeId: 'concussion_grenade', grenades: 20 },
+        4: { potionId: 'advanced_potion',  potions: 50,  rationId: 'highgrade_rations', rations: 50,  grenadeId: 'incendiary_grenade', grenades: 30 },
+        5: { potionId: 'advanced_potion',  potions: 100, rationId: 'highgrade_rations', rations: 100, grenadeId: 'incendiary_grenade', grenades: 60 },
+      };
+      const out = PIPELINE[factoryTier];
+      if (out) {
+        const ts = Date.now();
+        const potionTemplate = allEquipment.find(e => e.id === out.potionId);
+        const rationTemplate = allEquipment.find(e => e.id === out.rationId);
+        const grenadeTemplate = allEquipment.find(e => e.id === out.grenadeId);
+        if (potionTemplate)
+          for (let i = 0; i < out.potions; i++)
+            state.addInventoryItem({ ...potionTemplate, inventoryId: `pipe_potion_${ts}_${i}` });
+        if (rationTemplate)
+          for (let i = 0; i < out.rations; i++)
+            state.addInventoryItem({ ...rationTemplate, inventoryId: `pipe_ration_${ts}_${i}` });
+        if (grenadeTemplate)
+          for (let i = 0; i < out.grenades; i++)
+            state.addInventoryItem({ ...grenadeTemplate, inventoryId: `pipe_grenade_${ts}_${i}` });
+      }
+    }
     // Reset escape flags, deployed state, and apply morale floor
     postMissionReset();
+    // Auto-recruit: fill empty beds if setting is enabled
+    if (autoRecruit) {
+      const state = useGameStore.getState();
+      const liveMaidens = state.maidens.filter(m => !m.isFallen);
+      let beds = state.mbase.beds - liveMaidens.length;
+      let currentMaidens = [...state.maidens];
+      let currentMoney = state.mbase.money;
+      let freeFree = state.freeRecruitCount;
+      let freeUsed = 0;
+      const rosariumBuilding = state.buildings.find((b: any) => b.id === 'rosarium_vocis');
+      const rosariumLvDef = rosariumBuilding?.isConstructed && rosariumBuilding.currentLevel > 0
+        ? rosariumBuilding.levels[rosariumBuilding.currentLevel - 1]
+        : null;
+      const perRecruitCost: number = (rosariumLvDef?.effectValue as any)?.recruitCost ?? 150;
+      const gearRarity: number = Number((rosariumLvDef?.effectValue as any)?.gearRarity ?? 1);
+      while (beds > 0) {
+        const rollCost = freeFree > 0 ? 0 : perRecruitCost;
+        if (rollCost > currentMoney) break;
+        if (freeFree > 0) { freeFree--; freeUsed++; } else currentMoney -= rollCost;
+        const pool = [recruitMaiden(currentMaidens), recruitMaiden(currentMaidens), recruitMaiden(currentMaidens)];
+        const heroines = pool.filter(m => m.type === 'heroine');
+        const candidates = heroines.length > 0 ? heroines : pool;
+        let best = candidates.reduce((a, b) => b.stats.dexterity > a.stats.dexterity ? b : a);
+        if (gearRarity > 1) best = enrichRecruitGear(best, gearRarity);
+        state.addMaiden(best);
+        currentMaidens = [...currentMaidens, best];
+        beds--;
+      }
+      if (currentMoney !== state.mbase.money) state.setMBase({ money: currentMoney });
+      for (let i = 0; i < freeUsed; i++) state.decrementFreeRecruit();
+    }
+    // Wave counter management
+    if (!isLyssaWave) {
+      decrementMissionsUntilWave();
+    } else {
+      completeLyssaWave(); // reset counter to N for current tier — both win and loss
+    }
+
     setCombatLocked(false);
     missionKillsRef.current = 0;
     // Regenerate mission pool after every mission conclusion
@@ -233,24 +572,27 @@ export default function Missions() {
 
           if (deadIds.size > 0) {
             // Remove dead maidens from every team they belong to;
-            // if the team leader died, promote the survivor with the highest strategy stat.
+            // if the team leader died, promote the best survivor:
+            // heroines first, then highest charm.
             teams.forEach(team => {
               const hadDead = team.memberIds.some(id => deadIds.has(id));
               if (!hadDead) return;
               const newMemberIds = team.memberIds.filter(id => !deadIds.has(id));
               let newLeaderId = team.leaderId;
               if (team.leaderId && deadIds.has(team.leaderId)) {
-                // Pick highest-strategy living member from the updated list
+                // Gather living survivors from current stage + the rest of the roster
                 const survivors = updatedMaidens.filter(
                   m => newMemberIds.includes(m.id) && m.currentHp > 0
                 );
-                // Also consider maidens already in store that aren't in updatedMaidens
                 const storeMembers = maidens.filter(
                   m => newMemberIds.includes(m.id) && !deadIds.has(m.id) && m.currentHp > 0 && !m.isFallen
                 );
-                const candidates = survivors.length > 0 ? survivors : storeMembers;
-                const best = candidates.reduce<Maiden | null>(
-                  (top, m) => (!top || getStat(m, 'strategy') > getStat(top, 'strategy') ? m : top),
+                const candidates: Maiden[] = survivors.length > 0 ? survivors : storeMembers;
+                // Heroines first; within each group sort by charm descending
+                const heroines = candidates.filter(m => m.type === 'heroine');
+                const pool = heroines.length > 0 ? heroines : candidates;
+                const best = pool.reduce<Maiden | null>(
+                  (top, m) => (!top || getStat(m, 'charm') > getStat(top, 'charm') ? m : top),
                   null
                 );
                 newLeaderId = best?.id ?? undefined;
@@ -259,7 +601,7 @@ export default function Missions() {
             });
           }
         }}
-        onAbortMission={handleReturnToMissions}
+        onAbortMission={handleAbortMission}
         onStageComplete={(updatedMaidens: Maiden[], stageOutcome: StageOutcome, stageExpGains: ExpGain[], _stageMoraleGains: any[], moraleEscapedIds: string[], moraleCapturedIds: string[], permanentMoraleDeltas: Map<string, number>) => {
           // Apply practical EXP for this stage
           applyPracticalExpGains(stageExpGains);
@@ -285,21 +627,15 @@ export default function Missions() {
           // Track enemy kills for Meridian review
           if (isWin) missionKillsRef.current += missionState.stageEnemies.length;
 
-          // Rescue any maidens captured during this stage if the team won
-          if (isWin && moraleCapturedIds.length > 0 && missionState.selectedTeamId) {
-            const actualCapturedIds = moraleCapturedIds.filter(id => !moraleEscapedIds.includes(id));
-            if (actualCapturedIds.length > 0) {
-              rescueCapturedMaidens(actualCapturedIds, missionState.selectedTeamId);
-              // Remove them from mission's capturedMaidenIds since they were rescued
-              const existing = activeMission.capturedMaidenIds ?? [];
-              const remaining = existing.filter(id => !actualCapturedIds.includes(id));
-              setMission(activeMission.id, { capturedMaidenIds: remaining });
-            }
-          }
+          // NOTE: Maidens captured mid-mission (moraleCapturedIds) are NOT rescued here.
+          // They stay captured (recorded on mission.capturedMaidenIds) until the entire
+          // mission is won. Only then are they rescued in the final-stage block below.
+          // This ensures aborting mid-mission does not accidentally free them.
           if (nextStageIdx >= activeMission.stages.length || !isWin) {
             // Mission complete or failed — apply post-mission building effects
             const deployedIds = missionState.stageMaidens.map(m => m.id);
-            applyPostMissionEffects(deployedIds, missionKillsRef.current);
+            const missionIsWin = isWin && nextStageIdx >= activeMission.stages.length;
+            applyPostMissionEffects(deployedIds, missionKillsRef.current, missionIsWin);
 
             if (isWin && nextStageIdx >= activeMission.stages.length) {
               // Mission victory!
@@ -343,6 +679,7 @@ export default function Missions() {
                 }
               });
             }
+            missionWonRef.current = isWin && nextStageIdx >= activeMission.stages.length;
             handleReturnToMissions();
             return;
           }
@@ -351,9 +688,23 @@ export default function Missions() {
           const outIds = new Set([...moraleCapturedIds, ...moraleEscapedIds]);
           const survivors = updatedMaidens.filter(m => m.currentHp > 0 && !outIds.has(m.id));
           const nextStage = activeMission.stages[nextStageIdx];
+          // If the leader fell this stage, use the newly promoted leader for the next stage
+          const currentLeaderId = missionState.leaderId;
+          const leaderAlive = currentLeaderId && survivors.some(m => m.id === currentLeaderId);
+          let nextLeaderId = currentLeaderId;
+          if (!leaderAlive && survivors.length > 0) {
+            const heroines = survivors.filter(m => m.type === 'heroine');
+            const pool = heroines.length > 0 ? heroines : survivors;
+            const best = pool.reduce<Maiden | null>(
+              (top, m) => (!top || getStat(m, 'charm') > getStat(top, 'charm') ? m : top),
+              null
+            );
+            nextLeaderId = best?.id ?? undefined;
+          }
           setMissionState(s => ({
             ...s,
             currentStageIdx: nextStageIdx,
+            leaderId: nextLeaderId,
             events: [],
             stageMaidens: survivors,
             stageEnemies: initializeStageEnemies(nextStage).map(e => enrichEnemyGear(e)),
@@ -365,12 +716,103 @@ export default function Missions() {
   }
 
   const fsi = computeForceStrengthIndex(maidens);
+  const lyssaWaveActive = missions.length === 1 && missions[0]?.rewardFocus === 'lyssa_wave';
 
   return (
     <div>
-      <h2 style={{ marginBottom: 16 }}>⚔️ Missions</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ margin: 0 }}>⚔️ Missions</h2>
+        {/* Lyssa wave countdown */}
+        {lyssaWaveActive ? (
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#ff4444', background: 'rgba(139,0,0,0.2)', border: '1px solid #ff4444', borderRadius: 5, padding: '3px 10px', animation: 'none' }}>
+            🚨 LYSSA WAVE ACTIVE
+          </span>
+        ) : (
+          <span
+            title="Missions remaining before a Lyssa Wave is triggered"
+            style={{
+              fontSize: 12, fontWeight: 600,
+              color: missionsUntilNextWave <= 3 ? '#ff4444' : missionsUntilNextWave <= 7 ? '#c8954a' : 'var(--color-text-muted)',
+              background: missionsUntilNextWave <= 3 ? 'rgba(139,0,0,0.15)' : 'transparent',
+              border: `1px solid ${missionsUntilNextWave <= 3 ? '#ff444488' : 'var(--color-border)'}`,
+              borderRadius: 5, padding: '3px 10px', cursor: 'default',
+            }}
+          >
+            {missionsUntilNextWave <= 3 ? '⚠️' : '🌊'} Wave in {missionsUntilNextWave}
+          </span>
+        )}
+        {/* Auto-recruit toggle */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+          <span style={{ fontSize: 12, color: autoRecruit ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
+            ⚡ Auto-Recruit
+          </span>
+          <div
+            onClick={() => setAutoRecruit(!autoRecruit)}
+            style={{
+              width: 36, height: 20, borderRadius: 10,
+              background: autoRecruit ? 'var(--color-accent-dark)' : '#333',
+              border: `1px solid ${autoRecruit ? 'var(--color-accent)' : '#555'}`,
+              position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 2,
+              left: autoRecruit ? 18 : 2,
+              width: 14, height: 14, borderRadius: '50%',
+              background: autoRecruit ? 'var(--color-accent)' : '#666',
+              transition: 'left 0.2s',
+            }} />
+          </div>
+        </label>
+      </div>
 
-      {/* ── Mission list (shown first) ── */}
+      {/* ── Main two-column layout ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' }}>
+        {/* Left: banners + missions + FSI */}
+        <div>
+
+      {/* ── Lyssa Wave emergency banner ── */}
+      {lyssaWaveActive && (
+        <div style={{
+          background: 'rgba(139,0,0,0.18)', border: '2px solid #ff4444', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'flex-start', gap: 12,
+        }}>
+          <span style={{ fontSize: 22, flexShrink: 0 }}>🚨</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#ff6666', marginBottom: 4 }}>EMERGENCY — BASE UNDER ATTACK</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              A massive Lyssa-led force is advancing on Fort Waelfeld. All normal operations are suspended.
+              You <strong style={{ color: '#ff6666' }}>must</strong> deploy and defend the base.
+              Defeat will result in <strong style={{ color: '#ff6666' }}>25–75% of all resources being looted</strong>.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Lyssa raid result notification ── */}
+      {lyssaRaidPercent !== null && (
+        <div style={{
+          background: 'rgba(139,0,0,0.25)', border: '2px solid #ff4444', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#ff6666', marginBottom: 4 }}>💥 Base Overrun!</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              The Lyssa wave was not repelled. Enemy forces looted <strong style={{ color: '#ff6666' }}>{lyssaRaidPercent}%</strong> of all base resources.
+              Maidens left behind scrambled to flee — some were captured, others barely made it out.
+              The wave countdown has reset. Rebuild before the next assault arrives.
+            </div>
+          </div>
+          <button
+            onClick={() => setLyssaRaidPercent(null)}
+            style={{ background: 'none', border: '1px solid #ff4444', color: '#ff6666', borderRadius: 4, padding: '4px 12px', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}
+          >Dismiss</button>
+        </div>
+      )}
+
+      {/* ── Mission list ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
         {unlockedMissions.map(m => (
           <MissionListItem
@@ -378,6 +820,8 @@ export default function Missions() {
             mission={m}
             selected={selectedMissionId === m.id}
             onSelect={() => setSelectedMissionId(m.id)}
+            onHoverIn={(hm: any) => setHoveredMission(hm)}
+            onHoverOut={() => setHoveredMission(null)}
           />
         ))}
         {unlockedMissions.length === 0 && <div style={{ color: 'var(--color-text-muted)', fontSize: 12 }}>No missions available</div>}
@@ -395,6 +839,17 @@ export default function Missions() {
             <div>⚔️ Avg power/maiden: <strong style={{ color: 'var(--color-text)' }}>{fsi.avgCombatPower}</strong></div>
             <div>📈 Total FSI: <strong style={{ color: 'var(--color-accent)' }}>{fsi.fsi}</strong></div>
             <div>Next tier at: <strong style={{ color: 'var(--color-text)' }}>{TIER_CONFIGS[Math.min(fsi.tier, TIER_CONFIGS.length - 1)].fsiMin}</strong></div>
+            <div>
+              {lyssaWaveActive
+                ? <span style={{ color: '#ff4444', fontWeight: 700 }}>🚨 LYSSA WAVE ACTIVE</span>
+                : <>
+                    🌊 Next Lyssa Wave in:{' '}
+                    <strong style={{ color: missionsUntilNextWave <= 3 ? '#ff4444' : missionsUntilNextWave <= 7 ? '#c8954a' : 'var(--color-text)' }}>
+                      {missionsUntilNextWave} mission{missionsUntilNextWave !== 1 ? 's' : ''}
+                    </strong>
+                  </>
+              }
+            </div>
           </div>
 
           {/* Tier reference table */}
@@ -438,6 +893,20 @@ export default function Missions() {
         </div>
       </details>
 
+        </div>
+
+        {/* Right: Adjudicator panel */}
+        <AdjudicatorPanel
+          missions={missions}
+          hoveredMission={hoveredMission}
+          maidens={maidens}
+          teams={teams}
+          missionsUntilNextWave={missionsUntilNextWave}
+          lyssaWaveActive={lyssaWaveActive}
+          consecutiveEasyMissions={consecutiveEasyMissions}
+        />
+      </div>{/* end two-column grid */}
+
       {/* Mission detail popup */}
       {selectedMission && (
         <div
@@ -452,7 +921,7 @@ export default function Missions() {
               mission={selectedMission}
               teams={teams}
               maidens={maidens}
-              onStartMission={(teamId: string, autoTrade: boolean) => { setSelectedMissionId(null); startMission(teamId, autoTrade); }}
+              onStartMission={(teamId: string, autoTrade: boolean, aeCfg: AutoEquipConfig) => { setSelectedMissionId(null); startMission(teamId, autoTrade, aeCfg); }}
               onClose={() => setSelectedMissionId(null)}
             />
           </div>
@@ -462,22 +931,573 @@ export default function Missions() {
   );
 }
 
-function MissionListItem({ mission, selected, onSelect }: any) {
-  const diffColor = mission.difficulty === 'easy' ? '#4a8c4a' : mission.difficulty === 'normal' ? '#c8954a' : mission.difficulty === 'hard' ? '#c84a4a' : '#b84040';
+// ── Adjudicator of the Meridian ─────────────────────────────────────────────
+// Moods calibrated to simulation data:
+//   'overwhelming' ≈ 99%+ win  (ratio ≥ 1.6)
+//   'safe'         ≈ 82%+ win  (ratio ≥ 1.1)
+//   'contested'    ≈ 54%+ win  (ratio ≥ 0.85)
+//   'risky'        ≈ 19%+ win  (ratio ≥ 0.55)
+//   'dire'         < 19% win   (ratio < 0.55)
+type AdjMood =
+  | 'overwhelming' | 'safe' | 'contested' | 'risky' | 'dire'
+  | 'lyssa_wave' | 'strike_force' | 'wave_imminent' | 'strike_available'
+  | 'no_team' | 'idle'
+  | 'easy_streak_warning'  // 3–4 consecutive easy missions
+  | 'easy_forced';         // 5 consecutive — HQ mandate, easy missions removed
+
+const ADJ_LINES: Record<AdjMood, string[]> = {
+  overwhelming: [
+    "This engagement is well within your current capability. A clean sweep is the expected outcome. Remain tactically disciplined — even favourable odds punish complacency.",
+    "Force projection shows a decisive advantage. At this FSI ratio I project near-certain success. The mission is yours; do not let overconfidence blunt your edge.",
+    "Your team significantly outclasses this objective. Execute cleanly, minimise unnecessary exposure, and extract with full accountability. HQ will have nothing to note in the after-action.",
+    "An operation this manageable should generate minimal friction. Send your best-equipped element, maintain formation discipline, and be back before nightfall.",
+  ],
+  safe: [
+    "Your team holds a measurable edge over this threat. Projected success rate is strong. Proceed — but multi-stage engagements demand sustained attention, not just initial momentum.",
+    "Force assessment: your FSI exceeds the projected threat by a comfortable margin. A clean outcome is the most probable scenario. Execute with standard precaution.",
+    "A favourable engagement at current force levels. The risk of significant casualties is low, though not zero. Ensure your maidens are well-supplied before committing.",
+    "This operation is within parameters. The enemy is outmatched but not trivial. Cover your withdrawal lanes, and complete the objective efficiently.",
+  ],
+  contested: [
+    "Comparable forces on both sides. This engagement will be competitive — your maidens will take fire and the outcome is not guaranteed. Confirm your loadout is complete before deploying.",
+    "The threat assessment puts this engagement close to parity. Based on the FSI spread, I estimate 60 to 75 percent probability of success. Preparation will determine the outcome.",
+    "A contested engagement. Your team is capable, but the enemy will extract a cost. In multi-stage operations, attrition compounds — what you lose early cannot be recovered mid-mission.",
+    "This is not a certain operation. The enemy's combat rating is within striking distance of your force. Avoid overextension, and have an exit contingency ready.",
+  ],
+  risky: [
+    "Your current FSI falls notably short of what this engagement demands. I estimate a 25 to 40 percent success probability. Reinforcing your team before deployment is strongly advised.",
+    "The projected outcome at your current force levels is unfavourable. The enemy outclasses your available strength by a meaningful margin. Proceed only if you have no alternative.",
+    "I am required to note that this operation exceeds your current projected capability. High casualty and capture risk. HQ does not prohibit high-risk sorties — but the record will reflect who made the call.",
+    "A difficult engagement at current force levels. The FSI mismatch is significant, and in multi-stage operations that gap compounds across each phase. Reinforce or wait for a better window.",
+  ],
+  dire: [
+    "I cannot recommend this engagement at current force levels. Your FSI is critically insufficient for the projected threat. Deploying this team is likely to result in total loss.",
+    "The force imbalance here is severe. The enemy's assessed strength dwarfs your available deployment by a wide margin. This is not a difficult mission — it is an unsurvivable one at present strength.",
+    "My assessment is unambiguous: this objective is beyond your capacity at this time. I strongly advise against commitment. Recover your forces, reinforce your roster, and revisit when the numbers are viable.",
+  ],
+  lyssa_wave: [
+    "This is not a field operation — this is a base defence emergency. HQ requires immediate deployment. There are no acceptable alternatives.",
+    "A Lyssa formation is advancing on Fort Waelfeld. Every second you hesitate is ground yielded to the enemy. Deploy. Now.",
+    "My report to HQ will note whether you met this threat with appropriate urgency. Do not make me write a failure report, Commander.",
+  ],
+  strike_force: [
+    "A Strike Force operation. The Lyssa commanding this sector is the primary target — HQ has flagged her as a strategic threat. The longer she operates unchecked, the more dangerous she becomes.",
+    "Strike Force tasking. This is not a routine sweep. The Lyssa element here represents a consolidation of enemy leadership. Your team's FSI must be sufficient for this class of engagement.",
+    "HQ's Strike Force designation reflects the severity of the threat. Lyssa commanders do not yield without a fight — ensure your team's combat weight matches the mission rating before deploying.",
+    "These are priority operations from HQ. Lyssa commanders amplify the threat of every unit around them. At contested odds against a Lyssa, expect the engagement to be harder than the numbers suggest.",
+  ],
+  wave_imminent: [
+    "Commander — the Lyssa wave interval is nearly exhausted. I strongly advise addressing your force readiness before the window closes.",
+    "According to HQ's tracking, a Lyssa wave is imminent. Any mission you select now must be weighed against that coming pressure.",
+    "I am on record recommending you prepare for the incoming Lyssa wave. HQ will not be forgiving if the base is caught undersupplied.",
+  ],
+  strike_available: [
+    "There is a Strike Force operation in the available pool. HQ has flagged the Lyssa presence in that sector as a growing threat. I recommend prioritising it.",
+    "One of the available missions carries Strike Force classification. The Lyssa element there will only strengthen if left unaddressed. Take note.",
+    "A Strike Force tasking is available. The longer it goes unanswered, the more coordinated the enemy becomes. HQ is paying attention.",
+  ],
+  no_team: [
+    "You have no deployable team assembled. No assessment can be made and no mission can proceed. Organise your roster in the Composition page.",
+    "There is no formed unit to evaluate. The Composition page is where you build teams, Commander. I will wait.",
+  ],
+  idle: [
+    "Adjudicator, attached to Fort Waelfeld by order of The Meridian. I review operational performance and report to HQ. Hover over a mission for my assessment.",
+    "I am here to evaluate, not to choose for you. Hover over a mission and I will give you my honest assessment of the odds.",
+    "The Meridian keeps records of every sortie — victories, losses, and the decisions that led to both. Choose your next operation carefully.",
+    "HQ monitors the Lyssa activity in this region closely. My role is to ensure that field decisions reflect the strategic picture. Proceed thoughtfully.",
+  ],
+  easy_streak_warning: [
+    "I have been watching your recent mission selections. Easy assignments, one after another. HQ has noticed. They expect more from a commander at your level.",
+    "Your last few sorties have all been low-intensity operations. I understand the appeal — low risk, acceptable return. But this unit was not established to take strolls. Headquarters is paying attention.",
+    "I have flagged your recent record to HQ. Three or more consecutive easy assignments is not a pattern they approve of. I recommend selecting something with real stakes before they are forced to act.",
+    "The easy missions are there for warm-ups, Commander — not as a permanent strategy. Your recent run of low-difficulty sorties is beginning to attract scrutiny from above.",
+    "I will be direct. Headquarters did not build this operation for you to farm easy targets. A few more of these and I won't have a choice but to escalate. Take something harder.",
+  ],
+  easy_forced: [
+    "That is enough. Five consecutive easy assignments — HQ has issued a formal mandate. Easy operations are suspended until you demonstrate your unit can handle real opposition. The choice has been made for you.",
+    "Headquarters has reviewed your sortie history and found it unacceptable. Effective immediately, low-difficulty assignments have been withdrawn from your pool. Take a real mission, or stand down entirely.",
+    "I have been directed by HQ to restrict your assignment pool. You had your chances to self-correct. Instead, you took the easy path five times running. No more easy missions until you show results at a higher tier.",
+    "Command has had enough. I filed the report, HQ acted on it. No easy missions this cycle — the mandate is in effect. Prove your unit is worth the resources invested in it.",
+    "Five easy missions. Five. I warned you, and you chose comfort over contribution. HQ's patience has run out. Normal-tier or above, this cycle. Non-negotiable.",
+  ],
+};
+
+function pickAdjLine(lines: string[]): string {
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+/** Rough FSI for a specific set of maidens (same formula as computeForceStrengthIndex). */
+function teamFsi(teamMaidens: Maiden[]): number {
+  let total = 0;
+  for (const m of teamMaidens) {
+    const base = (m.stats.strength + m.stats.dexterity + m.stats.constitution + m.stats.awareness) / 4;
+    total += base * (m.maxHp > 0 ? m.currentHp / m.maxHp : 1);
+  }
+  return Math.round(total);
+}
+
+/**
+ * Estimated FSI requirement for a mission — computed per stage.
+ *
+ * Calibrated against 5000+ mission simulation runs. Key findings:
+ *   - Lyssa multiplier must be 0.75 per Lyssa to match the engine's 1.5× FSI requirement.
+ *     At 0.5 (old), normal+Lyssa threat=72 showed ratio 0.22 but retreated — the gap was
+ *     being dramatically underestimated. Log data: normal+L retreats at avg ratio 0.83
+ *     of threshold; wins at avg 1.26. Raising to 0.75 aligns UI threat with engine gate.
+ *   - Stage attrition: each successive stage compounds casualties because HP is not
+ *     restored between stages. Factors below calibrated to log KIA curves.
+ *   - Quality weights W calibrated so ratio=1.0 → ~50% win (non-Lyssa single-stage).
+ */
+function missionThreatFsi(mission: any): number {
+  // Per-quality-tier base threat weights (calibrated to 5k-run simulation)
+  const W: Record<string, number> = { easy: 14, normal: 28, hard: 48, extreme: 76, hell: 115 };
+  function qToDiff(q: number): string {
+    if (q <= 3) return 'easy';
+    if (q <= 5) return 'normal';
+    if (q <= 7) return 'hard';
+    if (q <= 9) return 'extreme';
+    return 'hell';
+  }
+
+  const stages: any[] = mission.stages ?? [];
+  if (stages.length === 0) return 0;
+
+  let total = 0;
+  for (let si = 0; si < stages.length; si++) {
+    const stage = stages[si];
+    const zakoGroups: any[] = stage.template?.zako ?? [];
+    const lyssaCount: number =
+      (stage.template?.lyssaIds?.length ?? 0) +
+      (stage.enemies?.filter((e: any) => e.type === 'lyssa').length ?? 0);
+
+    // Effective enemy quality for this stage — read from template or fall back.
+    let stageQ: number;
+    if (zakoGroups.length > 0) {
+      stageQ = Math.max(...zakoGroups.map((g: any) => Number(g.quality ?? 1)));
+    } else {
+      const diffToQ: Record<string, number> = { easy: 2, normal: 4, hard: 6, extreme: 8, hell: 10 };
+      stageQ = diffToQ[mission.difficulty] ?? 4;
+    }
+
+    const stageWeight = W[qToDiff(stageQ)] ?? 28;
+    // Lyssa multiplier: 0.75 per Lyssa — matches engine's 1.5× FSI gate.
+    // Log analysis: old 0.5 multiplier caused UI to show "Safe" for missions that
+    // had avg 7 KIA and 31% retreat rate. 0.75 aligns displayed threat with reality.
+    const stageThreat = stageWeight * (1 + lyssaCount * 0.75);
+
+    // Sub-linear stage accumulation: HP attrition means stage 2+ starts degraded.
+    // Log calibration from multi-run data — not strictly multiplicative.
+    const stageFactor = si === 0 ? 1.0 : si === 1 ? 0.90 : si === 2 ? 0.80 : 0.70;
+    total += stageThreat * stageFactor;
+  }
+
+  return Math.round(total);
+}
+
+/**
+ * Estimate win probability from FSI ratio.
+ * Two separate sigmoids calibrated to 5k-run log data:
+ *
+ * Non-Lyssa: inflection at 0.70 — easy missions win at almost any ratio; hard non-Lyssa
+ *   is uncommon but still more forgiving than Lyssa equivalents.
+ *
+ * Lyssa: inflection at 1.05 — log data showed:
+ *   - normal+L retreated at avg ratio 0.83 (31% retreat rate total)
+ *   - normal+L won at avg ratio 1.26
+ *   - hard+L retreated at avg ratio 0.88 (66% retreat rate)
+ *   - extreme+L all retreated below FSI 400 (100% retreat rate at ratio < 0.5)
+ *   Steeper slope (k=6) reflects the high variance Lyssa missions exhibit.
+ */
+function estimateWinPct(ratio: number, hasLyssa: boolean): number {
+  if (hasLyssa) {
+    // Lyssa sigmoid — steeper, inflection at 1.05 (need FSI parity+ to have 50% win)
+    return Math.min(95, Math.max(3, Math.round(100 / (1 + Math.exp(-6.0 * (ratio - 1.05))))));
+  }
+  // Non-Lyssa sigmoid — gentler, inflection at 0.70
+  return Math.min(97, Math.max(3, Math.round(100 / (1 + Math.exp(-5.5 * (ratio - 0.70))))));
+}
+
+/**
+ * Estimate expected KIA based on mission type and FSI ratio.
+ * Derived from aggregate log statistics across 5000+ missions:
+ *   easy (no Lyssa): ~0 KIA regardless of ratio
+ *   easy+Lyssa:      avg 1.9 KIA overall; scales ~2× at poor ratio
+ *   normal+Lyssa:    avg 7 KIA; 9-14 KIA when ratio < 0.5
+ *   hard+Lyssa:      avg 12 KIA; 20-33 KIA in poor engagements
+ *   extreme+Lyssa:   avg 20 KIA; 40-55 KIA at low FSI
+ *   hell+Lyssa:      avg 50 KIA
+ * Scale: KIA ∝ (1/ratio)^0.6, floored at the "win" average, capped at recorded max.
+ */
+function estimateExpectedKia(
+  ratio: number,
+  difficulty: string,
+  lyssaCount: number,
+  stageCount: number,
+): { low: number; high: number } {
+  if (lyssaCount === 0) {
+    // Non-Lyssa: near-zero casualties at any reasonable ratio
+    const base = difficulty === 'hard' ? 1 : difficulty === 'extreme' ? 3 : 0;
+    return { low: 0, high: Math.max(0, Math.round(base * (1 / Math.max(ratio, 0.3)))) };
+  }
+  // Base KIA range [win-avg, retreat-avg] by difficulty tier from log data
+  const BASE: Record<string, [number, number]> = {
+    easy:    [1,  4],
+    normal:  [4, 14],
+    hard:    [8, 33],
+    extreme: [14, 54],
+    hell:    [30, 54],
+  };
+  const [winBase, retreatBase] = BASE[difficulty] ?? BASE.normal;
+  // Interpolate between win-case and retreat-case using ratio (clamped 0.3–2.0)
+  const r = Math.min(2.0, Math.max(0.3, ratio));
+  // At ratio=2.0: near win-base; at ratio=0.5: near retreat-base
+  const t = Math.max(0, Math.min(1, (2.0 - r) / 1.5));
+  const midKia = Math.round(winBase + t * (retreatBase - winBase));
+  // Multi-stage adds ~20% KIA per extra stage (attrition compounds)
+  const stageMult = 1 + (stageCount - 1) * 0.2;
+  return {
+    low:  Math.round(Math.max(0, midKia * 0.6 * stageMult)),
+    high: Math.round(midKia * 1.4 * stageMult),
+  };
+}
+
+function AdjudicatorPanel({
+  missions, hoveredMission, maidens, teams, missionsUntilNextWave, lyssaWaveActive, consecutiveEasyMissions,
+}: {
+  missions: any[];
+  hoveredMission: any | null;
+  maidens: Maiden[];
+  teams: any[];
+  missionsUntilNextWave: number;
+  lyssaWaveActive: boolean;
+  consecutiveEasyMissions: number;
+}) {
+  // Best deployable team FSI
+  const bestTeamFsi = (() => {
+    let best = 0;
+    for (const t of teams) {
+      const members = maidens.filter(
+        m => t.memberIds.includes(m.id) && !m.isFallen && !m.isCaptured && m.currentHp > 0
+      );
+      const f = teamFsi(members);
+      if (f > best) best = f;
+    }
+    return best;
+  })();
+  const hasDeployableTeam = bestTeamFsi > 0;
+
+  // Determine mood — thresholds calibrated to simulation data
+  const mood: AdjMood = (() => {
+    if (lyssaWaveActive) return 'lyssa_wave';
+    if (hoveredMission) {
+      if (hoveredMission.rewardFocus === 'lyssa_wave') return 'lyssa_wave';
+      if (hoveredMission.rewardFocus === 'strike_force') return 'strike_force';
+      if (!hasDeployableTeam) return 'no_team';
+      const threat = missionThreatFsi(hoveredMission);
+      const ratio = threat > 0 ? bestTeamFsi / threat : 2;
+      // Data-calibrated (15k-combo sim): 50% win ≈ ratio 0.82; 82% win ≈ ratio 1.1; 99% win ≈ ratio 1.6
+      if (ratio >= 1.6) return 'overwhelming';
+      if (ratio >= 1.1) return 'safe';
+      if (ratio >= 0.85) return 'contested';
+      if (ratio >= 0.55) return 'risky';
+      return 'dire';
+    }
+    if (!hasDeployableTeam) return 'no_team';
+    if (missionsUntilNextWave <= 3 && !lyssaWaveActive) return 'wave_imminent';
+    if (missions.some(m => m.rewardFocus === 'strike_force')) return 'strike_available';
+    // Easy-streak system (tier 1–2 only): warn at 3–4; forced at 5 (missions already have no easy)
+    if (consecutiveEasyMissions >= 5) return 'easy_forced';
+    if (consecutiveEasyMissions >= 3) return 'easy_streak_warning';
+    return 'idle';
+  })();
+
+  const [line, setLine] = useState(() => pickAdjLine(ADJ_LINES[mood]));
+  const prevMoodRef = useRef(mood);
+  useEffect(() => {
+    if (prevMoodRef.current !== mood) {
+      prevMoodRef.current = mood;
+      setLine(pickAdjLine(ADJ_LINES[mood]));
+    }
+  }, [mood]);
+
+  const accentColor =
+    mood === 'lyssa_wave'    ? '#ff4444' :
+    mood === 'dire'          ? '#c84a4a' :
+    mood === 'risky'         ? '#c8954a' :
+    mood === 'contested'     ? '#b8a04a' :
+    mood === 'safe'          ? '#4caf50' :
+    mood === 'overwhelming'  ? '#4caf50' :
+    mood === 'strike_force' || mood === 'strike_available' ? '#c87040' :
+    mood === 'wave_imminent' ? '#ff9800' :
+    mood === 'no_team' ? '#666' :
+    'var(--color-accent)';
+
+  const moodLabel =
+    mood === 'lyssa_wave'    ? '🚨 EMERGENCY' :
+    mood === 'strike_force'  ? '🛡️ Strike Force' :
+    mood === 'overwhelming'  ? '✦ Overwhelming' :
+    mood === 'safe'          ? '✔ Safe' :
+    mood === 'contested'     ? '⚡ Contested' :
+    mood === 'risky'         ? '⚠ Risky' :
+    mood === 'dire'          ? '☠ Dire' :
+    mood === 'wave_imminent' ? '⚠ Wave Imminent' :
+    mood === 'strike_available' ? '🛡️ SF Available' :
+    mood === 'no_team' ? '— No Team' : '';
+
+  // Threat gauge for hovered mission
+  const threatInfo = hoveredMission && hasDeployableTeam ? (() => {
+    const threat = missionThreatFsi(hoveredMission);
+    const ratio = threat > 0 ? bestTeamFsi / threat : 2;
+    const lyssaCount: number = hoveredMission.stages.reduce((n: number, s: any) =>
+      n + (s.template?.lyssaIds?.length ?? (s.enemies?.filter((e: any) => e.type === 'lyssa').length ?? 0)), 0);
+    const stageCount: number = hoveredMission.stages.length;
+    const hasLyssa = lyssaCount > 0;
+    const winPct = estimateWinPct(ratio, hasLyssa);
+    const pct = winPct;
+    const expectedKia = estimateExpectedKia(ratio, hoveredMission.difficulty ?? 'normal', lyssaCount, stageCount);
+    // FSI needed for "safe" run (82% win): reverse the sigmoid inflection point × threat
+    // Lyssa inflection 1.05; non-Lyssa 0.70
+    const safeRatioTarget = hasLyssa ? 1.05 : 0.70;
+    const fsiNeeded = Math.round(threat * safeRatioTarget);
+    const fsiForSafe82 = Math.round(threat * (hasLyssa ? 1.40 : 1.00)); // ~82% win threshold
+    return { threat, ratio: Math.round(ratio * 100) / 100, winPct, pct, lyssaCount, stageCount, hasLyssa, expectedKia, fsiNeeded, fsiForSafe82 };
+  })() : null;
+
+  return (
+    <div style={{
+      background: 'var(--color-surface)', border: `1px solid ${accentColor}`,
+      borderRadius: 8, overflow: 'hidden',
+      display: 'flex', flexDirection: 'column',
+      boxShadow: mood === 'lyssa_wave' ? '0 0 18px rgba(255,68,68,0.2)' : mood === 'safe' ? '0 0 10px rgba(76,175,80,0.1)' : 'none',
+      transition: 'border-color 0.3s, box-shadow 0.3s',
+      position: 'sticky', top: 12,
+    }}>
+      {/* Header */}
+      <div style={{
+        background: 'rgba(0,0,0,0.35)', borderBottom: `1px solid ${accentColor}`,
+        padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 'bold', color: accentColor }}>Adjudicator · The Meridian</span>
+        {moodLabel && (
+          <span style={{
+            fontSize: 10, color: accentColor, border: `1px solid ${accentColor}`,
+            borderRadius: 3, padding: '1px 6px', background: 'rgba(0,0,0,0.3)',
+          }}>{moodLabel}</span>
+        )}
+      </div>
+
+      {/* Portrait + speech */}
+      <div style={{ display: 'flex', flex: 1 }}>
+        {/* Portrait */}
+        <div style={{
+          flexShrink: 0, width: 130,
+          background: 'linear-gradient(to bottom, #0c0d10, #141618)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          borderRight: '1px solid var(--color-border)', overflow: 'hidden',
+        }}>
+          <img
+            src={`${_BASE}/imgs/chars/adjudicator.png`}
+            alt="Adjudicator of the Meridian"
+            style={{
+              width: '100%', objectFit: 'cover', objectPosition: 'top center', display: 'block',
+              filter:
+                mood === 'lyssa_wave' ? 'sepia(0.3) hue-rotate(-10deg)' :
+                mood === 'no_team' ? 'saturate(0.4)' :
+                mood === 'dire' ? 'sepia(0.4) hue-rotate(-5deg)' :
+                mood === 'risky' ? 'sepia(0.2)' : 'none',
+              transition: 'filter 0.3s',
+            }}
+          />
+        </div>
+
+        {/* Speech + data */}
+        <div style={{ flex: 1, padding: '16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Quote */}
+          <div style={{ position: 'relative', background: 'rgba(0,0,0,0.3)', border: `1px solid ${accentColor}`, borderRadius: 8, padding: '12px 14px' }}>
+            <div style={{
+              position: 'absolute', left: -8, top: '50%', transform: 'translateY(-50%)',
+              width: 0, height: 0,
+              borderTop: '7px solid transparent', borderBottom: '7px solid transparent',
+              borderRight: `8px solid ${accentColor}`,
+            }} />
+            <div style={{
+              position: 'absolute', left: -6, top: '50%', transform: 'translateY(-50%)',
+              width: 0, height: 0,
+              borderTop: '6px solid transparent', borderBottom: '6px solid transparent',
+              borderRight: '7px solid #0e0d0b',
+            }} />
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text)', lineHeight: 1.7, fontStyle: 'italic' }}>
+              "{line}"
+            </p>
+          </div>
+
+          {/* Easy-streak tick indicator: visible at tiers 1–2 when streak ≥ 1 */}
+          {consecutiveEasyMissions > 0 && (
+            <div style={{
+              background: consecutiveEasyMissions >= 5 ? 'rgba(192,96,128,0.15)' : 'rgba(0,0,0,0.25)',
+              border: `1px solid ${consecutiveEasyMissions >= 5 ? '#c06080' : '#6a4a30'}`,
+              borderRadius: 5, padding: '6px 10px',
+            }}>
+              <div style={{ fontSize: 10, color: consecutiveEasyMissions >= 5 ? '#e080a0' : '#a07050', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                {consecutiveEasyMissions >= 5
+                  ? '🚧 HQ Mandate — Easy missions removed'
+                  : '📄 Consecutive easy missions'}
+              </div>
+              <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                {[1,2,3,4,5].map(n => (
+                  <div key={n} style={{
+                    width: 16, height: 16, borderRadius: 3,
+                    background: n <= consecutiveEasyMissions
+                      ? (consecutiveEasyMissions >= 5 ? '#c06080' : n >= 4 ? '#b06040' : '#6a5030')
+                      : 'transparent',
+                    border: `2px solid ${n <= consecutiveEasyMissions
+                      ? (consecutiveEasyMissions >= 5 ? '#e080a0' : '#c8954a')
+                      : '#3a3020'}`,
+                    transition: 'background 0.2s, border-color 0.2s',
+                  }} />
+                ))}
+                <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginLeft: 4 }}>
+                  {consecutiveEasyMissions}/5
+                </span>
+              </div>
+              {consecutiveEasyMissions < 5 && (
+                <div style={{ fontSize: 10, color: '#7a5540', marginTop: 4 }}>
+                  {5 - consecutiveEasyMissions} more easy mission{5 - consecutiveEasyMissions !== 1 ? 's' : ''} until HQ intervenes
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Threat gauge */}
+          {threatInfo && (
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {/* Mission Intel strip */}
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: '4px 8px',
+                padding: '5px 8px',
+                background: 'rgba(0,0,0,0.25)', borderRadius: 5,
+                border: '1px solid var(--color-border)',
+              }}>
+                <span>FSI <strong style={{ color: 'var(--color-text)' }}>{bestTeamFsi}</strong></span>
+                <span style={{ color: 'var(--color-border)' }}>|</span>
+                <span>Threat <strong style={{ color: 'var(--color-text)' }}>{threatInfo.threat}</strong></span>
+                <span style={{ color: 'var(--color-border)' }}>|</span>
+                <span>{threatInfo.stageCount} stage{threatInfo.stageCount > 1 ? 's' : ''}</span>
+                {threatInfo.lyssaCount > 0 && (
+                  <><span style={{ color: 'var(--color-border)' }}>|</span>
+                  <span style={{ color: '#f88' }}>⚔ {threatInfo.lyssaCount} Lyssa</span></>
+                )}
+                <span style={{ color: 'var(--color-border)' }}>|</span>
+                <span style={{ color: 'var(--color-text-muted)' }}>ratio <strong style={{ color: threatInfo.ratio >= 1.4 ? '#4caf50' : threatInfo.ratio >= 0.9 ? '#c8954a' : '#c84a4a' }}>{threatInfo.ratio}×</strong></span>
+              </div>
+
+              {/* Win probability bar */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 10 }}>Est. success probability{threatInfo.hasLyssa ? ' (Lyssa-adjusted)' : ''}</span>
+                  <strong style={{
+                    color: threatInfo.winPct >= 75 ? '#4caf50' : threatInfo.winPct >= 40 ? '#c8954a' : '#c84a4a'
+                  }}>{threatInfo.winPct}%</strong>
+                </div>
+                <div style={{ height: 7, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden', position: 'relative' }}>
+                  <div style={{
+                    height: '100%', width: `${threatInfo.pct}%`,
+                    background: threatInfo.winPct >= 75 ? '#4caf50' : threatInfo.winPct >= 40 ? '#c8954a' : '#c84a4a',
+                    borderRadius: 3, transition: 'width 0.3s, background 0.3s',
+                  }} />
+                  {/* 50% and 82% marker lines */}
+                  <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'rgba(255,255,255,0.15)' }} />
+                  <div style={{ position: 'absolute', top: 0, left: '82%', width: 1, height: '100%', background: 'rgba(255,255,255,0.15)' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2, fontSize: 9, color: 'var(--color-text-muted)', opacity: 0.6 }}>
+                  <span>0%</span><span style={{ marginLeft: '42%' }}>50</span><span style={{ marginLeft: '22%' }}>82</span><span>100%</span>
+                </div>
+              </div>
+
+              {/* Expected KIA */}
+              {(threatInfo.lyssaCount > 0 || threatInfo.expectedKia.high > 0) && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '4px 8px', borderRadius: 4,
+                  background: threatInfo.expectedKia.high >= 20 ? 'rgba(200,74,74,0.12)' : threatInfo.expectedKia.high >= 8 ? 'rgba(200,149,74,0.10)' : 'rgba(0,0,0,0.2)',
+                  border: `1px solid ${threatInfo.expectedKia.high >= 20 ? 'rgba(200,74,74,0.3)' : threatInfo.expectedKia.high >= 8 ? 'rgba(200,149,74,0.25)' : 'var(--color-border)'}`,
+                }}>
+                  <span style={{ fontSize: 10 }}>Est. casualties</span>
+                  <strong style={{
+                    fontSize: 11,
+                    color: threatInfo.expectedKia.high >= 20 ? '#c84a4a' : threatInfo.expectedKia.high >= 8 ? '#c8954a' : '#6ab06a',
+                  }}>
+                    {threatInfo.expectedKia.low === 0 && threatInfo.expectedKia.high === 0
+                      ? '~0'
+                      : threatInfo.expectedKia.low === threatInfo.expectedKia.high
+                        ? `~${threatInfo.expectedKia.low}`
+                        : `${threatInfo.expectedKia.low}–${threatInfo.expectedKia.high}`} KIA
+                  </strong>
+                </div>
+              )}
+
+              {/* FSI-needed bar */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 10 }}>
+                  <span>FSI needed for safe run (82%)</span>
+                  <span style={{ color: bestTeamFsi >= threatInfo.fsiForSafe82 ? '#4caf50' : '#c8954a' }}>
+                    {bestTeamFsi} / <strong>{threatInfo.fsiForSafe82}</strong>
+                  </span>
+                </div>
+                <div style={{ height: 5, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, Math.round((bestTeamFsi / threatInfo.fsiForSafe82) * 100))}%`,
+                    background: bestTeamFsi >= threatInfo.fsiForSafe82 ? '#4caf50' : bestTeamFsi >= threatInfo.fsiNeeded ? '#c8954a' : '#c84a4a',
+                    borderRadius: 3, transition: 'width 0.3s',
+                  }} />
+                </div>
+              </div>
+
+              {threatInfo.hasLyssa && (
+                <div style={{ fontSize: 9, color: '#f884', fontStyle: 'italic' }}>
+                  ⚠ Lyssa missions carry higher variance than estimates imply — outcome depends on squad HP entering each stage.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Refresh */}
+          <button
+            onClick={() => setLine(pickAdjLine(ADJ_LINES[mood]))}
+            style={{
+              alignSelf: 'flex-start', background: 'none',
+              border: '1px solid var(--color-border)', color: 'var(--color-text-muted)',
+              borderRadius: 4, fontSize: 10, padding: '3px 10px', cursor: 'pointer',
+            }}
+          >↻ another word</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissionListItem({ mission, selected, onSelect, onHoverIn, onHoverOut }: any) {
+  const diffColor = mission.difficulty === 'easy' ? '#4a8c4a' : mission.difficulty === 'normal' ? '#c8954a' : mission.difficulty === 'hard' ? '#c84a4a' : mission.difficulty === 'hell' ? '#8b0000' : '#b84040';
   const rescueDefs = (mission.reward?.rescuedHeroineIds ?? []).map((id: string) => HEROINE_DEFINITIONS.find(h => h.id === id)).filter(Boolean);
-  const FOCUS_BADGE: Record<string, { icon: string; label: string; color: string }> = {
-    gold_heavy: { icon: '💰', label: 'Gold-heavy',  color: '#c8a84b' },
-    supply_run: { icon: '🍖', label: 'Supply run',  color: '#6ab06a' },
-    salvage:    { icon: '🔩', label: 'Salvage',     color: '#8ab0c8' },
-    training:   { icon: '📚', label: 'Training',    color: '#a08ac8' },
-    medal:      { icon: '🏅', label: 'Medal',       color: '#d4a84b' },
-    balanced:   { icon: '⚖️', label: 'Balanced',    color: '#888'   },
-    rescue:     { icon: '⛓️', label: 'Rescue',      color: '#e08080' },
+  const FOCUS_BADGE: Record<string, { icon: string; label: string; color: string; tooltip: string }> = {
+    gold_heavy:   { icon: '💰', label: 'Gold-heavy',   color: '#c8a84b', tooltip: "Raid the enemy's gold reserves or mine. Reward: 3× money, 0.5× all other resources." },
+    supply_run:   { icon: '🍖', label: 'Supply Run',   color: '#6ab06a', tooltip: "Strike the enemy's supply lines or depot. Reward: 2× money, 2× food, 2× wood, 2× metal." },
+    medal:        { icon: '🏅', label: 'Medal',        color: '#d4a84b', tooltip: 'Critical HQ strategic objective. Enemies +2 quality, +1 extra stage, extra Lyssa on final stage. Reward: 0.3× resources + prestige medal.' },
+    weapon_gear:  { icon: '⚔️', label: 'Weapon/Gear', color: '#8ab0c8', tooltip: "Raid the enemy's arms cache. Reward: 0.5× resources + non-consumable equipment (1–4 items, scales with difficulty)." },
+    consumable:   { icon: '💊', label: 'Consumable',  color: '#80c8a0', tooltip: "Hit the enemy's supply depot. Reward: 1× resources + consumable items (2–8, scales with difficulty)." },
+    balanced:     { icon: '⚖️', label: 'Balanced',    color: '#888888', tooltip: 'Standard wipeout against a normal enemy force. Reward: 1× all resources. No equipment.' },
+    strike_force: { icon: '🛡️', label: 'Strike Force',color: '#c87040', tooltip: 'Counter an enemy invasion advancing on HQ. Enemies +2 quality, +1 extra stage, extra Lyssa on final stage. Reward: 0.5× resources + prestige medal.' },
+    rescue:       { icon: '⛓️', label: 'Rescue',      color: '#e08080', tooltip: 'Captive maidens are being held in this sector. Complete the mission to rescue them.' },
+    lyssa_wave:   { icon: '🚨', label: 'Lyssa Wave',   color: '#ff4444', tooltip: 'EMERGENCY: A massive Lyssa-led force is attacking Fort Waelfeld directly. This is a mandatory defence — no other missions are available. Defeat = 25–75% of all base resources looted.' },
   };
   const focus = mission.rewardFocus ? FOCUS_BADGE[mission.rewardFocus] : null;
+  const [focusTipPos, setFocusTipPos] = useState<{ x: number; y: number } | null>(null);
   return (
     <div
       onClick={onSelect}
+      onMouseEnter={() => onHoverIn?.(mission)}
+      onMouseLeave={() => onHoverOut?.()}
       style={{
         padding: 10, background: 'var(--color-surface)', border: `1px solid ${selected ? 'var(--color-accent)' : 'var(--color-border)'}`,
         borderRadius: 6, cursor: 'pointer', transition: 'all 0.15s',
@@ -491,14 +1511,43 @@ function MissionListItem({ mission, selected, onSelect }: any) {
           {mission.isCompleted && <span style={{ marginLeft: 4, color: '#4a8c4a' }}>✓</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          <span style={{ fontSize: 10, color: diffColor }}>{mission.difficulty.toUpperCase()} · {mission.stages.length} stages</span>
+          <span style={{ fontSize: 10, color: diffColor }}>{mission.difficulty === 'hell' ? '☠ HELL' : mission.difficulty.toUpperCase()} · {mission.stages.length} stages</span>
           {focus && (
-            <span title={focus.label} style={{
-              fontSize: 10, color: focus.color,
-              background: `${focus.color}18`, border: `1px solid ${focus.color}55`,
-              borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap',
-            }}>
+            <span
+              onMouseEnter={e => { const z = parseFloat(document.documentElement.style.zoom)||1; setFocusTipPos({ x: e.clientX/z, y: e.clientY/z }); }}
+              onMouseMove={e => { const z = parseFloat(document.documentElement.style.zoom)||1; setFocusTipPos({ x: e.clientX/z, y: e.clientY/z }); }}
+              onMouseLeave={() => setFocusTipPos(null)}
+              style={{
+                fontSize: 10, color: focus.color,
+                background: `${focus.color}18`, border: `1px solid ${focus.color}55`,
+                borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap', cursor: 'help',
+                position: 'relative',
+              }}
+            >
               {focus.icon} {focus.label}
+              {focusTipPos && ReactDOM.createPortal(
+                <div style={{
+                  position: 'fixed',
+                  left: focusTipPos.x + 14,
+                  top: focusTipPos.y + 14,
+                  zIndex: 99999,
+                  background: 'var(--color-surface)',
+                  border: `1px solid ${focus.color}88`,
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  maxWidth: 270,
+                  pointerEvents: 'none',
+                  boxShadow: '0 4px 18px rgba(0,0,0,0.65)',
+                }}>
+                  <div style={{ fontWeight: 700, color: focus.color, fontSize: 12, marginBottom: 5 }}>
+                    {focus.icon} {focus.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                    {focus.tooltip}
+                  </div>
+                </div>,
+                document.body,
+              )}
             </span>
           )}
         </div>
@@ -519,7 +1568,10 @@ function MissionListItem({ mission, selected, onSelect }: any) {
 }
 
 function MissionDetail({ mission, teams, maidens, onStartMission, onClose }: any) {
-  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(() => {
+    const firstNonEmpty = (teams as any[]).find(t => t.memberIds && t.memberIds.length > 0);
+    return firstNonEmpty ? firstNonEmpty.id : null;
+  });
   const [autoTradeFood, setAutoTradeFood] = useState<boolean>(() => {
     const saved = localStorage.getItem('autoTradeFood');
     return saved === null ? true : saved === 'true';
@@ -528,6 +1580,15 @@ function MissionDetail({ mission, teams, maidens, onStartMission, onClose }: any
     setAutoTradeFood(val);
     localStorage.setItem('autoTradeFood', String(val));
   };
+  const [autoEquipCfg, setAutoEquipCfg] = useState<AutoEquipConfig>(loadAutoEquipConfig);
+  const [autoEquipExpanded, setAutoEquipExpanded] = useState(false);
+  const setAutoEquipSlot = (slot: AutoEquipSlot, val: boolean) => {
+    const next = { ...autoEquipCfg, [slot]: val };
+    setAutoEquipCfg(next);
+    saveAutoEquipConfig(next);
+  };
+  const autoEquipActive = Object.values(autoEquipCfg).some(Boolean);
+  const navigate = useNavigate();
   const currentFood = useGameStore(s => s.mbase.food ?? 0);
   const currentMoney = useGameStore(s => s.mbase.money ?? 0);
   const radioBuilt = useGameStore(s => s.buildings.find(b => b.id === 'radio_center')?.isConstructed ?? false);
@@ -652,46 +1713,91 @@ function MissionDetail({ mission, teams, maidens, onStartMission, onClose }: any
 
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 }}>Select Team</div>
-        <select
-          value={selectedTeamId || ''}
-          onChange={(e) => setSelectedTeamId(e.target.value || null)}
-          style={{
-            width: '100%', padding: '8px', background: '#0e0d0b', color: 'var(--color-text)',
-            border: '1px solid var(--color-border)', borderRadius: 4, marginBottom: 10, fontSize: 13,
-          }}
-        >
-          <option value="">Choose a team...</option>
-          {maidenTeams.map((t: any) => {
-            const deployable = teamDeployable(t);
-            const aliveCount = maidens.filter((m: Maiden) => t.memberIds.includes(m.id) && m.currentHp > 0 && !m.isFallen).length;
-            return (
-              <option key={t.id} value={t.id}>
-                {t.name} ({aliveCount}/{t.memberIds.length} alive){!deployable ? ' ✕' : ''}
-              </option>
-            );
-          })}
-        </select>
+        {maidenTeams.length === 0 ? (
+          <div style={{ padding: '12px 14px', background: '#0e0d0b', border: '1px solid var(--color-border)', borderRadius: 6, fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'center' }}>
+            No teams found. <button onClick={() => { onClose(); navigate('/composition'); }} style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: 12, padding: 0 }}>Create one on the Composition page →</button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8 }}>
+            {maidenTeams.map((t: any) => {
+              const deployable = teamDeployable(t);
+              const members: Maiden[] = maidens.filter((m: Maiden) => t.memberIds.includes(m.id));
+              const aliveMembers = members.filter((m: Maiden) => m.currentHp > 0 && !m.isFallen && !m.isCaptured);
+              const leader = members.find((m: Maiden) => m.id === t.leaderId) ?? members[0];
+              const foodCost = aliveMembers.reduce((sum: number, m: Maiden) => sum + 20 + (m.stats?.strength ?? 0), 0);
+              const isSelected = selectedTeamId === t.id;
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => deployable && setSelectedTeamId(isSelected ? null : t.id)}
+                  style={{
+                    position: 'relative',
+                    background: isSelected ? 'rgba(200,149,74,0.12)' : '#0e0d0b',
+                    border: `2px solid ${isSelected ? 'var(--color-accent)' : deployable ? 'var(--color-border)' : '#3a2020'}`,
+                    borderRadius: 8,
+                    padding: '10px 10px 8px',
+                    cursor: deployable ? 'pointer' : 'not-allowed',
+                    opacity: deployable ? 1 : 0.5,
+                    transition: 'border-color 0.15s, background 0.15s',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    userSelect: 'none',
+                  }}
+                >
+                  {/* Edit button */}
+                  <button
+                    onClick={e => { e.stopPropagation(); onClose(); navigate('/composition'); }}
+                    title="Edit team formation"
+                    style={{
+                      position: 'absolute', top: 5, right: 5,
+                      background: 'rgba(200,149,74,0.15)',
+                      border: '1px solid var(--color-accent-dark)',
+                      borderRadius: 4, color: 'var(--color-accent)',
+                      cursor: 'pointer', fontSize: 11, lineHeight: 1,
+                      padding: '2px 4px',
+                    }}
+                  >✏️</button>
 
-        {selectedTeam && (
-          <div style={{ padding: 10, background: '#0e0d0b', borderRadius: 4, marginBottom: 10, fontSize: 12 }}>
-            <div style={{ color: 'var(--color-accent)', fontWeight: 'bold', marginBottom: 6 }}>{selectedTeam.name}</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {teamMembers.map((m: Maiden) => {
-                const isOut = m.isFallen || m.currentHp <= 0;
-                const isCap = m.isCaptured;
-                return (
-                  <span key={m.id} style={{
-                    background: isCap ? 'rgba(120,0,180,0.15)' : isOut ? 'rgba(184,64,64,0.12)' : 'rgba(200,149,74,0.15)',
-                    padding: '3px 8px', borderRadius: 3,
-                    border: `1px solid ${isCap ? '#a040e0' : isOut ? 'var(--color-danger)' : 'var(--color-accent-dark)'}`,
-                    color: isCap ? '#c080ff' : isOut ? '#e88' : 'var(--color-text-muted)',
-                    fontSize: 11,
-                  }}>
-                    {m.nickname ?? m.name.split(' ')[0]} {isOut ? '💀' : isCap ? '⛓️ Captured' : `(HP: ${m.currentHp}/${m.maxHp})`}
-                  </span>
-                );
-              })}
-            </div>
+                  {/* Leader portrait */}
+                  {leader ? (
+                    <img
+                      src={getMaidenIcon(leader.imgId)}
+                      alt={leader.name}
+                      style={{
+                        width: 52, height: 52,
+                        objectFit: 'cover',
+                        borderRadius: 6,
+                        border: `1px solid ${isSelected ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                        filter: deployable ? 'none' : 'grayscale(80%)',
+                      }}
+                    />
+                  ) : (
+                    <div style={{ width: 52, height: 52, borderRadius: 6, background: 'var(--color-surface)', border: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>👤</div>
+                  )}
+
+                  {/* Team name */}
+                  <div style={{
+                    fontSize: 11, fontWeight: 'bold',
+                    color: isSelected ? 'var(--color-accent)' : 'var(--color-text)',
+                    textAlign: 'center', lineHeight: 1.2,
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{t.name}</div>
+
+                  {/* Stats row */}
+                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--color-text-muted)' }}>
+                    <span title="Alive / total members">👤 {aliveMembers.length}/{members.length}</span>
+                    <span title="Food cost to deploy">🍖 {foodCost}</span>
+                  </div>
+
+                  {/* Selected checkmark */}
+                  {isSelected && (
+                    <div style={{ position: 'absolute', top: 5, left: 7, fontSize: 12, color: 'var(--color-accent)' }}>✓</div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -754,8 +1860,69 @@ function MissionDetail({ mission, teams, maidens, onStartMission, onClose }: any
         );
       })()}
 
+      {/* Auto-Equip */}
+      <div style={{ marginBottom: 12 }}>
+        <button
+          onClick={() => setAutoEquipExpanded(v => !v)}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            width: '100%', background: autoEquipActive ? 'rgba(200,149,74,0.1)' : '#0e0d0b',
+            border: `1px solid ${autoEquipActive ? 'var(--color-accent)' : 'var(--color-border)'}`,
+            borderRadius: autoEquipExpanded ? '4px 4px 0 0' : 4,
+            color: autoEquipActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            cursor: 'pointer', fontSize: 11, padding: '5px 10px', userSelect: 'none',
+          }}
+        >
+          <span>🎒 Auto-Equip{autoEquipActive ? ` (${Object.values(autoEquipCfg).filter(Boolean).length} active)` : ''}</span>
+          <span>{autoEquipExpanded ? '▲' : '▼'}</span>
+        </button>
+        {autoEquipExpanded && (
+          <div style={{
+            background: '#0e0d0b', border: '1px solid var(--color-border)',
+            borderTop: 'none', borderRadius: '0 0 4px 4px',
+            padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 2 }}>
+              Before deployment, equipped maidens will automatically take better gear from the base inventory.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px 12px' }}>
+              {(AUTO_EQUIP_SLOTS.filter(s => !['potion','ration','grenade'].includes(s)) as AutoEquipSlot[]).map(slot => (
+                <label key={slot} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', fontSize: 11, color: autoEquipCfg[slot] ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                  <input
+                    type="checkbox"
+                    checked={autoEquipCfg[slot]}
+                    onChange={e => setAutoEquipSlot(slot, e.target.checked)}
+                    style={{ accentColor: 'var(--color-accent)', width: 12, height: 12, cursor: 'pointer' }}
+                  />
+                  {AE_SLOT_LABELS[slot]}
+                </label>
+              ))}
+            </div>
+            <div style={{ paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginBottom: 5 }}>Consumables <span style={{ opacity: 0.55 }}>(up to {mission.stages.length} per type)</span></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px 12px' }}>
+                {(['potion','ration','grenade'] as AutoEquipSlot[]).map(slot => (
+                  <label key={slot} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', fontSize: 11, color: autoEquipCfg[slot] ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                    <input
+                      type="checkbox"
+                      checked={autoEquipCfg[slot]}
+                      onChange={e => setAutoEquipSlot(slot, e.target.checked)}
+                      style={{ accentColor: 'var(--color-accent)', width: 12, height: 12, cursor: 'pointer' }}
+                    />
+                    {AE_SLOT_LABELS[slot]}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: '#888', fontStyle: 'italic' }}>
+              ⚠️ Carry weight limits are respected. Exclusive slots (Weapon / Head / Mask / Body / Arms / Legs) swap only if a better-rated item is found. Accessories and medals fill remaining capacity.
+            </div>
+          </div>
+        )}
+      </div>
+
       <button
-        onClick={() => canStart && onStartMission(selectedTeamId, autoTradeFood)}
+        onClick={() => canStart && onStartMission(selectedTeamId, autoTradeFood, autoEquipCfg)}
         disabled={!canStart}
         style={{
           width: '100%', padding: '10px', background: canStart ? 'var(--color-accent-dark)' : '#555',
@@ -844,10 +2011,24 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
   // Auto-sync HP to store as soon as a stage concludes (before player clicks Next)
   const maidenStatesRef = useRef(maidenStates);
   maidenStatesRef.current = maidenStates;
+  // Keep a ref to moraleCapturedIds so the battleComplete effect can read the latest value
+  const moraleCapturedIdsRef = useRef(moraleCapturedIds);
+  moraleCapturedIdsRef.current = moraleCapturedIds;
   useEffect(() => {
     if (battleComplete && !hpSyncedRef.current) {
       hpSyncedRef.current = true;
-      onSyncHP(maidenStatesRef.current);
+      // Morale-captured maidens have HP=0 in the simulation as an internal mechanism;
+      // they must NOT be treated as "dead by gunfire" here — applyMoraleQuitEvents
+      // handles their state (isCaptured: true). Only truly dead maidens are synced.
+      const capturedSet = new Set(moraleCapturedIdsRef.current);
+      const syncMaidens = maidenStatesRef.current.map(m => {
+        // If the simulation has her at 0 HP but she is NOT in capturedSet, her death
+        // may not have been parsed from the log (e.g. grenade friendly-fire).
+        // Use maidenStates HP as-is for everyone; the captured guard in onSyncHP
+        // ensures captured maidens are never falsely marked fallen.
+        return capturedSet.has(m.id) ? { ...m, currentHp: Math.max(1, m.currentHp) } : m;
+      });
+      onSyncHP(syncMaidens);
     }
   }, [battleComplete]);
 
@@ -863,8 +2044,12 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
     // Base hold times; divided by current speed multiplier
     const baseHoldMs =
       event.type === 'log' && event.message.includes('Round') ? 2200
-      : event.type === 'attack' || event.type === 'retreat_fire'  ? 1800
-      : event.type === 'miss'                                      ? 1400
+      : (event.type === 'attack' || event.type === 'retreat_fire') &&
+        (event.message.startsWith('💣') || event.message.startsWith('💥'))    ? 2000
+      : event.type === 'attack' || event.type === 'retreat_fire'               ? 1800
+      : event.type === 'miss'   && event.message.startsWith('💣')              ? 1600
+      : event.type === 'log'    && (event.message.startsWith('💊') || event.message.startsWith('🍖')) ? 1800
+      : event.type === 'miss'                                                   ? 1400
       : event.type === 'cover_gained' || event.type === 'cover_lost' || event.type === 'cover_blocked' ? 1000
       : 600;
     const holdMs   = Math.round(baseHoldMs / speedRef.current);
@@ -903,6 +2088,7 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
     let nextEnemyCover  = [...enemyCover];
     for (const ev of remaining) {
       if (ev.type === 'attack') {
+        // Standard hit
         const m = ev.message.match(/(.+?)\s+hits\s+(.+?)\s+for\s+(\d+)\s+damage/);
         if (m) {
           const target = m[2]; const dmg = parseInt(m[3]);
@@ -911,6 +2097,45 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
               ? { ...x, currentHp: Math.max(0, x.currentHp - dmg) } : x);
           nextEnemies = nextEnemies.map(x =>
             x.name === target ? { ...x, currentHp: (x as any).type === 'lyssa' ? Math.max(1, x.currentHp - dmg) : Math.max(0, x.currentHp - dmg) } : x);
+        }
+        // Grenade multi-hits
+        if (ev.message.startsWith('💣') || ev.message.startsWith('💥')) {
+          const pairRx = /([\w\s'\-]+?)\s+\((\d+)\s+dmg/g;
+          let gm: RegExpExecArray | null;
+          while ((gm = pairRx.exec(ev.message)) !== null) {
+            const tName = gm[1].trim(); const gdmg = parseInt(gm[2]);
+            nextEnemies = nextEnemies.map(x =>
+              x.name === tName ? { ...x, currentHp: (x as any).type === 'lyssa' ? Math.max(1, x.currentHp - gdmg) : Math.max(0, x.currentHp - gdmg) } : x);
+            nextMaidens = nextMaidens.map(x =>
+              (x.nickname ?? x.name.split(' ')[0]) === tName || x.name === tName
+                ? { ...x, currentHp: Math.max(0, x.currentHp - gdmg) } : x);
+          }
+        }
+      }
+      if (ev.type === 'log') {
+        // Potion heal
+        const potionM = ev.message.match(/^💊\s+(.+?)\s+uses .+?now\s+(\d+)\/(\d+)\s+HP/);
+        if (potionM) {
+          const healerName = potionM[1].trim(); const newHp = parseInt(potionM[2]);
+          nextMaidens = nextMaidens.map(x =>
+            (x.nickname ?? x.name.split(' ')[0]) === healerName || x.name === healerName
+              ? { ...x, currentHp: newHp } : x);
+        }
+        // Rations HP
+        const rationsM = ev.message.match(/^🍖\s+(.+?)\s+eats .+?\+\s*(\d+)\s+HP/);
+        if (rationsM && parseInt(rationsM[2]) > 0) {
+          const eaterName = rationsM[1].trim(); const hpGain = parseInt(rationsM[2]);
+          nextMaidens = nextMaidens.map(x =>
+            (x.nickname ?? x.name.split(' ')[0]) === eaterName || x.name === eaterName
+              ? { ...x, currentHp: Math.min(x.maxHp, x.currentHp + hpGain) } : x);
+        }
+        // Grenade critical error (friendly-fire)
+        const ffM = ev.message.match(/^💥 \[Critical Error!\].+?([\w\s'\-]+?)\s+takes\s+(\d+)\s+friendly-fire damage/);
+        if (ffM) {
+          const victimName = ffM[1].trim(); const dmg = parseInt(ffM[2]);
+          nextMaidens = nextMaidens.map(x =>
+            (x.nickname ?? x.name.split(' ')[0]) === victimName || x.name === victimName
+              ? { ...x, currentHp: Math.max(0, x.currentHp - dmg) } : x);
         }
       }
       if (ev.type === 'cover_gained') {
@@ -980,6 +2205,7 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
 
   const applyEventToStates = (event: CombatEvent) => {
     if (event.type === 'attack') {
+      // Standard hit: "X hits Y for N damage"
       const match = event.message.match(/(.+?)\s+hits\s+(.+?)\s+for\s+(\d+)\s+damage/);
       if (match) {
         const targetName = match[2];
@@ -999,6 +2225,60 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
               : e
           ));
         }
+      }
+      // Grenade hits: individual "NAME (N dmg)" pairs in the message
+      if (event.message.startsWith('💣') || event.message.startsWith('💥')) {
+        const pairRegex = /([\w\s'\-]+?)\s+\((\d+)\s+dmg/g;
+        let m: RegExpExecArray | null;
+        while ((m = pairRegex.exec(event.message)) !== null) {
+          const tName = m[1].trim();
+          const dmg = parseInt(m[2]);
+          const tEnemy = enemyStates.find(e => e.name === tName);
+          const tMaiden = maidenStates.find(x => (x.nickname ?? x.name.split(' ')[0]) === tName || x.name === tName);
+          if (tEnemy) {
+            setEnemyStates(prev => prev.map(e =>
+              e.id === tEnemy.id
+                ? { ...e, currentHp: (e as any).type === 'lyssa' ? Math.max(1, e.currentHp - dmg) : Math.max(0, e.currentHp - dmg) }
+                : e
+            ));
+          } else if (tMaiden) {
+            setMaidenStates(prev => prev.map(x =>
+              x.id === tMaiden.id ? { ...x, currentHp: Math.max(0, x.currentHp - dmg) } : x
+            ));
+          }
+        }
+      }
+    }
+    if (event.type === 'log') {
+      // Healing potion: "💊 NAME uses ITEM! (+N HP, now C/M HP)"
+      const potionMatch = event.message.match(/^💊\s+(.+?)\s+uses .+?now\s+(\d+)\/(\d+)\s+HP/);
+      if (potionMatch) {
+        const healerName = potionMatch[1].trim();
+        const newHp = parseInt(potionMatch[2]);
+        setMaidenStates(prev => prev.map(m =>
+          (m.nickname ?? m.name.split(' ')[0]) === healerName || m.name === healerName
+            ? { ...m, currentHp: newHp } : m
+        ));
+      }
+      // Grenade critical error (friendly-fire): "💥 [Critical Error!] X's grenade ... Y takes N friendly-fire damage!"
+      const ffMatch = event.message.match(/^💥 \[Critical Error!\].+?([\w\s'\-]+?)\s+takes\s+(\d+)\s+friendly-fire damage/);
+      if (ffMatch) {
+        const victimName = ffMatch[1].trim();
+        const dmg = parseInt(ffMatch[2]);
+        setMaidenStates(prev => prev.map(m =>
+          (m.nickname ?? m.name.split(' ')[0]) === victimName || m.name === victimName
+            ? { ...m, currentHp: Math.max(0, m.currentHp - dmg) } : m
+        ));
+      }
+      // Rations: "🍖 NAME eats ITEM before the engagement. (+N HP, +M morale)"
+      const rationsHpMatch = event.message.match(/^🍖\s+(.+?)\s+eats .+?\+\s*(\d+)\s+HP/);
+      if (rationsHpMatch && parseInt(rationsHpMatch[2]) > 0) {
+        const eaterName = rationsHpMatch[1].trim();
+        const hpGain = parseInt(rationsHpMatch[2]);
+        setMaidenStates(prev => prev.map(m =>
+          (m.nickname ?? m.name.split(' ')[0]) === eaterName || m.name === eaterName
+            ? { ...m, currentHp: Math.min(m.maxHp, m.currentHp + hpGain) } : m
+        ));
       }
     }
     if (event.type === 'cover_gained') {
@@ -1053,7 +2333,7 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
   const isVictory = stageOutcome === 'maiden_victory' || stageOutcome === 'enemy_retreat';
 
   return (
-    <div style={{ minHeight: '100vh', padding: 24 }}>
+    <div style={{ minHeight: '100vh', padding: 24, width: '100%', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         {!battleComplete && (
           <>
@@ -1094,15 +2374,24 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
       </div>
 
       <h2 style={{ marginBottom: 4 }}>🗡️ {mission.name} — Stage {missionState.currentStageIdx + 1}/{mission.stages.length}</h2>
-      <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>{currentStage.description}</div>
+      <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 8 }}>{currentStage.description}</div>
+      <div style={{ borderTop: '1px dashed var(--color-border)', marginBottom: 16 }} />
 
       {/* Stage result — shown at the top as soon as battle concludes */}
       {battleComplete && (() => {
-        const alive     = maidenStates.filter(m => m.currentHp > 0 && !m.isFallen && !m.isCaptured);
-        const dead      = maidenStates.filter(m => m.isFallen || m.currentHp <= 0);
-        const captured  = maidenStates.filter(m => m.isCaptured);
-        const belowHalf = alive.filter(m => m.currentHp < (m.maxHp ?? 1) * 0.5);
-        const lowMorale = alive.filter(m => (personalMoraleState[m.id] ?? 50) < 30);
+        const capturedSet  = new Set(moraleCapturedIds);
+        const escapedSet   = new Set(moraleEscapedIds);
+        // Morale-captured/escaped IDs not yet reflected in maidenStates flags (applied on Next click)
+        const alive        = maidenStates.filter(m => m.currentHp > 0 && !m.isFallen && !m.isCaptured && !capturedSet.has(m.id) && !escapedSet.has(m.id));
+        const dead         = maidenStates.filter(m => m.isFallen || (m.currentHp <= 0 && !capturedSet.has(m.id)));
+        // Morale-captured: IDs in capturedSet — resolve names from maidenStates
+        const moraleCaptured = maidenStates.filter(m => capturedSet.has(m.id));
+        // Morale-escaped: IDs in escapedSet
+        const moraleEscaped  = maidenStates.filter(m => escapedSet.has(m.id));
+        const belowHalf    = alive.filter(m => m.currentHp < (m.maxHp ?? 1) * 0.5);
+        const lowMorale    = alive.filter(m => (personalMoraleState[m.id] ?? 50) < 30);
+        const isFinalStage = isVictory && missionState.currentStageIdx >= mission.stages.length - 1;
+        const reward       = isFinalStage ? mission.reward : null;
         return (
           <div style={{
             background: isVictory ? 'rgba(74,140,74,0.1)' : 'rgba(184,64,64,0.1)',
@@ -1125,11 +2414,12 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
             {/* Maiden status summary */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
               {([
-                { icon: '🟢', label: 'Alive',        count: alive.length,     color: '#4a9c5a', always: true },
-                { icon: '💀', label: 'KIA',           count: dead.length,      color: '#b84040', always: false },
-                { icon: '⛓️', label: 'Captured',     count: captured.length,  color: '#c8a84b', always: false },
-                { icon: '🩸', label: 'Below 50% HP', count: belowHalf.length, color: '#c87040', always: false },
-                { icon: '😰', label: 'Low Morale',   count: lowMorale.length, color: '#8b5fc4', always: false },
+                { icon: '🟢', label: 'Alive',        count: alive.length,             color: '#4a9c5a', always: true },
+                { icon: '💀', label: 'KIA',           count: dead.length,              color: '#b84040', always: false },
+                { icon: '⛓️', label: 'Captured',     count: moraleCaptured.length,    color: '#c8a84b', always: false },
+                { icon: '🏃', label: 'Fled',          count: moraleEscaped.length,     color: '#8b8b40', always: false },
+                { icon: '🩸', label: 'Below 50% HP', count: belowHalf.length,         color: '#c87040', always: false },
+                { icon: '😰', label: 'Low Morale',   count: lowMorale.length,         color: '#8b5fc4', always: false },
               ] as const).filter(s => s.always || s.count > 0).map(s => (
                 <div key={s.label} style={{
                   display: 'flex', alignItems: 'center', gap: 6,
@@ -1149,9 +2439,14 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
                 <strong>KIA:</strong> {dead.map(m => m.nickname ?? m.name.split(' ')[0]).join(', ')}
               </div>
             )}
-            {captured.length > 0 && (
+            {moraleCaptured.length > 0 && (
               <div style={{ fontSize: 11, color: '#c8a84b', marginBottom: 6 }}>
-                <strong>Captured:</strong> {captured.map(m => m.nickname ?? m.name.split(' ')[0]).join(', ')}
+                <strong>⛓️ Captured:</strong> {moraleCaptured.map(m => m.nickname ?? m.name.split(' ')[0]).join(', ')}
+              </div>
+            )}
+            {moraleEscaped.length > 0 && (
+              <div style={{ fontSize: 11, color: '#8b8b40', marginBottom: 6 }}>
+                <strong>🏃 Fled:</strong> {moraleEscaped.map(m => m.nickname ?? m.name.split(' ')[0]).join(', ')}
               </div>
             )}
             {belowHalf.length > 0 && (
@@ -1160,8 +2455,100 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
               </div>
             )}
             {lowMorale.length > 0 && (
-              <div style={{ fontSize: 11, color: '#8b5fc4', marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: '#8b5fc4', marginBottom: 8 }}>
                 <strong>Shaken (morale&lt;30):</strong> {lowMorale.map(m => `${m.nickname ?? m.name.split(' ')[0]} (${Math.round(personalMoraleState[m.id] ?? 0)})`).join(', ')}
+              </div>
+            )}
+
+            {/* Mission reward — only on final stage victory */}
+            {reward && (
+              <div style={{
+                background: 'rgba(0,0,0,0.25)', border: '1px solid #4a6a3a',
+                borderRadius: 6, padding: '10px 14px', marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 'bold', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  🏆 Mission Reward
+                </div>
+                {/* Resources row */}
+                {((reward.money ?? 0) > 0 || (reward.food ?? 0) > 0 || (reward.wood ?? 0) > 0 || (reward.metal ?? 0) > 0) && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+                    {(reward.money ?? 0) > 0 && (
+                      <span style={{ fontSize: 13, color: '#e6c84b' }}>💰 {reward.money}</span>
+                    )}
+                    {(reward.food ?? 0) > 0 && (
+                      <span style={{ fontSize: 13, color: '#78c878' }}>🍖 {reward.food}</span>
+                    )}
+                    {(reward.wood ?? 0) > 0 && (
+                      <span style={{ fontSize: 13, color: '#c8a464' }}>🪵 {reward.wood}</span>
+                    )}
+                    {(reward.metal ?? 0) > 0 && (
+                      <span style={{ fontSize: 13, color: '#8ab4d0' }}>⚙️ {reward.metal}</span>
+                    )}
+                  </div>
+                )}
+                {/* Equipment list */}
+                {(reward.equipment ?? []).length > 0 && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+                    <span style={{ color: '#a0c0e0', marginRight: 6 }}>🎒 Items:</span>
+                    {(reward.equipment as any[]).map((eq: any) => eq.name ?? eq.id).join(', ')}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* KIA icon strip */}
+            {dead.length > 0 && (() => {
+              const heroineKia = dead.filter((m: any) => m.type === 'heroine');
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: '#b84040', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+                    💀 KIA {dead.length}({heroineKia.length})
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {dead.map((m: any) => {
+                      const isHeroine = m.type === 'heroine';
+                      return (
+                        <img
+                          key={m.id}
+                          src={getUnitIcon(m.imgId)}
+                          alt={m.name}
+                          title={m.nickname ?? m.name.split(' ')[0]}
+                          style={{
+                            width: 32, height: 32, objectFit: 'cover', borderRadius: 4,
+                            border: isHeroine ? '2px solid #f5c842' : '2px solid #555',
+                            boxShadow: isHeroine ? '0 0 6px #f5c84266' : 'none',
+                            filter: 'grayscale(100%) brightness(0.5)', opacity: 0.8,
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* Captured icon strip */}
+            {moraleCaptured.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: '#c8a84b', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>⛓️ Captured ({moraleCaptured.length})</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {moraleCaptured.map((m: any) => {
+                    const isHeroine = m.type === 'heroine';
+                    return (
+                      <img
+                        key={m.id}
+                        src={getUnitIcon(m.imgId)}
+                        alt={m.name}
+                        title={m.nickname ?? m.name.split(' ')[0]}
+                        style={{
+                          width: 32, height: 32, objectFit: 'cover', borderRadius: 4,
+                          border: isHeroine ? '2px solid #f5c842' : '2px solid #8b6020',
+                          boxShadow: isHeroine ? '0 0 6px #f5c84266' : 'none',
+                          filter: 'grayscale(100%) sepia(0.4) brightness(0.55)', opacity: 0.85,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -1174,7 +2561,7 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
               </button>
               {isVictory && missionState.currentStageIdx < mission.stages.length - 1 && (
                 <button
-                  onClick={() => onAbortMission()}
+                  onClick={() => onAbortMission(moraleEscapedIds, moraleCapturedIds)}
                   style={{
                     padding: '10px 20px', background: 'transparent',
                     color: 'var(--color-danger)', border: '1px solid var(--color-danger)',
@@ -1190,29 +2577,30 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
         );
       })()}
 
-      {/* Event animation strip — always visible, scrolls independently of the team columns */}
-      <ActionStage
-        event={stageEvent}
-        visible={stageVisible}
-        allCombatants={allCombatants}
-        battleComplete={battleComplete}
-      />
+      {/* Event animation strip — hidden once battle concludes; icon summary takes over */}
+      {!battleComplete && (
+        <ActionStage
+          event={stageEvent}
+          visible={stageVisible}
+          allCombatants={allCombatants}
+          battleComplete={battleComplete}
+        />
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(320px, 1fr) 200px', gap: 16, marginBottom: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 8 }}>
         {/* Maiden team morale */}
         <div>
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 3 }}>
-            Team Morale: <strong style={{ color: maidenTeamMorale >= 70 ? '#4a8c4a' : maidenTeamMorale >= 30 ? '#c8a84b' : '#b84040' }}>{Math.round(maidenTeamMorale)}</strong>
+            Your Morale: <strong style={{ color: maidenTeamMorale >= 70 ? '#4a8c4a' : maidenTeamMorale >= 30 ? '#c8a84b' : '#b84040' }}>{Math.round(maidenTeamMorale)}</strong>
           </div>
           <div style={{ height: 8, background: '#333', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${maidenTeamMorale}%`, background: maidenTeamMorale >= 70 ? '#4a8c4a' : maidenTeamMorale >= 30 ? '#c8a84b' : '#b84040', transition: 'width 0.4s' }} />
           </div>
         </div>
-        <div />
         {/* Enemy team morale */}
         <div>
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 3 }}>
-            Team Morale: <strong style={{ color: enemyTeamMorale >= 70 ? '#4a8c4a' : enemyTeamMorale >= 30 ? '#c8a84b' : '#b84040' }}>{Math.round(enemyTeamMorale)}</strong>
+            Enemy Morale: <strong style={{ color: enemyTeamMorale >= 70 ? '#4a8c4a' : enemyTeamMorale >= 30 ? '#c8a84b' : '#b84040' }}>{Math.round(enemyTeamMorale)}</strong>
           </div>
           <div style={{ height: 8, background: '#333', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${enemyTeamMorale}%`, background: enemyTeamMorale >= 70 ? '#4a8c4a' : enemyTeamMorale >= 30 ? '#c8a84b' : '#b84040', transition: 'width 0.4s' }} />
@@ -1220,8 +2608,8 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '200px minmax(320px, 1fr) 200px', gap: 16, marginBottom: 16 }}>
-        {/* Maiden team */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+        {/* Maiden team — 2-col RTL wrap */}
         <CombatantPanel
           label="Your Team"
           combatants={maidenStates}
@@ -1239,12 +2627,12 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
           capturedNames={capturedNames}
           displayedEvents={displayedEvents}
           stageMoraleGains={stageMoraleGains}
+          leaderId={missionState.leaderId}
+          twoCol={true}
+          rtl={true}
         />
 
-        {/* centre spacer — ActionStage is now rendered above the morale bars */}
-        <div />
-
-        {/* Enemy team */}
+        {/* Enemy team — 2-col LTR wrap */}
         <CombatantPanel
           label="Enemy Team"
           combatants={enemyStates}
@@ -1263,6 +2651,15 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
           capturedNames={capturedNames}
           displayedEvents={displayedEvents}
           stageMoraleGains={stageMoraleGains}
+          twoCol={true}
+          rtl={false}
+          leaderId={(() => {
+            const aliveEnemies = enemyStates.filter((e: any) => e.currentHp > 0);
+            if (aliveEnemies.length === 0) return undefined;
+            const lyssas = aliveEnemies.filter((e: any) => e.type === 'lyssa');
+            const pool = lyssas.length > 0 ? lyssas : aliveEnemies;
+            return pool.reduce((top: any, e: any) => getStat(e, 'strategy') > getStat(top, 'strategy') ? e : top).id;
+          })()}
         />
       </div>
 
@@ -1308,7 +2705,7 @@ function BattleScreen({ mission, missionState, speed, setSpeed, onSyncHP, onAbor
 }
 
 // ── Combatant side panel ──────────────────────────────────────────────────────
-function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarAlive, borderAlive, borderDead, isEnemy, coverLevel, retreating, personalMoraleState = {}, escapingNames = [], escapedNames = [], capturedNames = [], displayedEvents = [], stageMoraleGains = [] }: any) {
+function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarAlive, borderAlive, borderDead, isEnemy, coverLevel, retreating, personalMoraleState = {}, escapingNames = [], escapedNames = [], capturedNames = [], displayedEvents = [], stageMoraleGains = [], leaderId, twoCol = false, rtl = false }: any) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -1324,7 +2721,12 @@ function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarA
       {coverLevel > 0 && (
         <div style={{ fontSize: 10, color: '#4a9eff', marginBottom: 6 }}>🛡 Cover Level {coverLevel}</div>
       )}
-      {combatants.map((c: any) => {
+      <div style={twoCol ? { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 6, direction: rtl ? 'rtl' : 'ltr', overflow: 'hidden', paddingLeft: 16, paddingRight: 16 } : undefined}>
+      {([...combatants].sort((a: any, b: any) => {
+        if (a.id === leaderId) return -1;
+        if (b.id === leaderId) return 1;
+        return 0;
+      }) as any[]).map((c: any) => {
         const cName = !isEnemy ? (c.nickname ?? c.name) : c.name;
         const hasCover = coverList.includes(cName);
         const isStunned = stunnedList.includes(cName);
@@ -1341,11 +2743,12 @@ function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarA
         return (
           <div
             key={c.id}
-            style={{ marginBottom: 12, fontSize: 11, display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}
+            style={{ marginBottom: twoCol ? 4 : 12, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', position: 'relative', minWidth: 0, ...(twoCol ? { direction: 'ltr', padding: '2px 4px' } : {}) }}
             onMouseEnter={e => {
               if (leaveTimerRef.current) clearTimeout(leaveTimerRef.current);
               setHoveredId(c.id);
-              setTooltipPos({ x: e.clientX, y: e.clientY });
+              const z = parseFloat(document.documentElement.style.zoom) || 1;
+              setTooltipPos({ x: e.clientX / z, y: e.clientY / z });
             }}
 
             onMouseLeave={() => {
@@ -1358,12 +2761,19 @@ function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarA
                 alt={c.name}
                 style={{
                   width: 40, height: 40, objectFit: 'cover', borderRadius: 4,
-                  border: hasCover ? '2px solid #4a9eff' : `2px solid ${alive ? (isEnemy ? '#8b2020' : borderAlive) : borderDead}`,
-                  boxShadow: hasCover ? '0 0 6px #4a9eff88' : 'none',
+                  border: c.id === leaderId && alive
+                    ? '2px solid #f5c842'
+                    : hasCover ? '2px solid #4a9eff' : `2px solid ${alive ? (isEnemy ? '#8b2020' : borderAlive) : borderDead}`,
+                  boxShadow: c.id === leaderId && alive
+                    ? '0 0 8px #f5c84288'
+                    : hasCover ? '0 0 6px #4a9eff88' : 'none',
                   opacity: alive ? 1 : 0.45,
                   transition: 'border-color 0.3s, box-shadow 0.3s, opacity 0.4s',
                 }}
               />
+              {c.id === leaderId && alive && (
+                <span title="Team leader" style={{ position: 'absolute', top: -7, left: '50%', transform: 'translateX(-50%)', fontSize: 11, lineHeight: 1, filter: 'drop-shadow(0 0 3px #f5c842)' }}>👑</span>
+              )}
               {hasCover && (
                 <span style={{ position: 'absolute', top: -5, right: -5, fontSize: 11, filter: 'drop-shadow(0 0 3px #4a9eff)' }}>🛡</span>
               )}
@@ -1372,6 +2782,9 @@ function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarA
               )}
               {!isEnemy && (c as any).isStarved && (
                 <span title="Starved — HP halved, −50% hit/dodge/scout/cover" style={{ position: 'absolute', bottom: -5, left: -5, fontSize: 11, filter: 'drop-shadow(0 0 4px #e07030)' }}>🥀</span>
+              )}
+              {alive && (c.equipment ?? []).some((e: any) => e.weaponType === 'grenade' || (e.id ?? '').includes('grenade')) && (
+                <span title="Carrying a grenade" style={{ position: 'absolute', top: '50%', left: -14, transform: 'translateY(-50%)', fontSize: 12, filter: 'drop-shadow(0 0 3px #e8a020)', lineHeight: 1 }}>💣</span>
               )}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -1442,6 +2855,7 @@ function CombatantPanel({ label, combatants, coverList, stunnedList = [], hpBarA
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -1681,15 +3095,42 @@ function ActionStage({ event, visible, allCombatants, battleComplete }: {
     | { kind: 'cover_lost'; name: string; img: string }
     | { kind: 'cover_blocked'; attackerName: string; defenderName: string; attackerImg: string; defenderImg: string }
     | { kind: 'retreat'; attackerName: string; defenderName: string; damage: number; attackerImg: string; defenderImg: string }
+    | { kind: 'grenade'; throwerName: string; throwerImg: string; damage: number; hitCount: number; isCritError: boolean }
+    | { kind: 'grenade_miss'; throwerName: string; throwerImg: string }
+    | { kind: 'potion'; name: string; img: string; healAmount: number }
+    | { kind: 'ration'; name: string; img: string; hpGain: number; moraleGain: number }
     | { kind: 'idle' };
 
   let view: StageView = { kind: 'idle' };
 
   if (event) {
     if (event.type === 'log') {
-      const roundMatch = event.message.match(/[-=]+\s*Round\s*(\d+)/i) || event.message.match(/Round\s*(\d+)/i);
-      if (roundMatch) view = { kind: 'round', round: parseInt(roundMatch[1]) };
-      else view = { kind: 'idle' };
+      // Healing potion
+      const potionM = event.message.match(/^💊\s+(.+?)\s+uses .+?\+(\d+)\s+HP/);
+      if (potionM) {
+        view = { kind: 'potion', name: potionM[1].trim(), img: findPortrait(potionM[1].trim()), healAmount: parseInt(potionM[2]) };
+      } else {
+        // Rations
+        const rationM = event.message.match(/^🍖\s+(.+?)\s+eats .+?\+(\d+)\s+HP,\s*\+(\d+)\s+morale/);
+        if (rationM) {
+          view = { kind: 'ration', name: rationM[1].trim(), img: findPortrait(rationM[1].trim()), hpGain: parseInt(rationM[2]), moraleGain: parseInt(rationM[3]) };
+        } else {
+          const roundMatch = event.message.match(/[-=]+\s*Round\s*(\d+)/i) || event.message.match(/Round\s*(\d+)/i);
+          if (roundMatch) view = { kind: 'round', round: parseInt(roundMatch[1]) };
+          else view = { kind: 'idle' };
+        }
+      }
+    } else if (event.type === 'attack' && (event.message.startsWith('💣') || event.message.startsWith('💥'))) {
+      // Grenade hit or critical error
+      const isCritError = event.message.startsWith('💥');
+      const totalM = event.message.match(/total\s+(\d+)\s+damage/);
+      const hitNames = (event.message.match(/([\w\s'\-]+?)\s+\(\d+\s+dmg/g) || []).length;
+      view = {
+        kind: 'grenade', throwerName: event.attackerName, throwerImg: findPortrait(event.attackerName),
+        damage: event.damage ?? (totalM ? parseInt(totalM[1]) : 0), hitCount: hitNames, isCritError,
+      };
+    } else if (event.type === 'miss' && event.message.startsWith('💣')) {
+      view = { kind: 'grenade_miss', throwerName: event.attackerName, throwerImg: findPortrait(event.attackerName) };
     } else if (event.type === 'attack') {
       const match = event.message.match(/(.+?)\s+hits\s+(.+?)\s+for\s+(\d+)/);
       if (match) {
@@ -1894,6 +3335,69 @@ function ActionStage({ event, visible, allCombatants, battleComplete }: {
       );
     }
 
+    if (view.kind === 'grenade') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            {view.throwerImg && <img src={view.throwerImg} alt={view.throwerName} style={portraitStyle(view.isCritError ? '#e05050' : '#e8a020')} />}
+            <span style={{ position: 'absolute', bottom: -8, right: -8, fontSize: 22, filter: `drop-shadow(0 0 6px ${view.isCritError ? '#e05050' : '#e8a020'})` }}>💣</span>
+          </div>
+          <div style={nameTag(view.throwerName, view.isCritError ? '#e08080' : '#e8c060')}>{view.throwerName}</div>
+          <div style={{ fontSize: 13, fontWeight: 'bold', letterSpacing: 1, color: view.isCritError ? '#e05050' : '#e8a020' }}>
+            {view.isCritError ? '💥 CRITICAL ERROR' : `GRENADE — ${view.damage} DMG`}
+          </div>
+          {!view.isCritError && view.hitCount > 0 && (
+            <div style={{ fontSize: 10, color: '#e8a020a0' }}>{view.hitCount} target{view.hitCount !== 1 ? 's' : ''} hit</div>
+          )}
+        </div>
+      );
+    }
+
+    if (view.kind === 'grenade_miss') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            {view.throwerImg && <img src={view.throwerImg} alt={view.throwerName} style={portraitStyle('#888')} />}
+            <span style={{ position: 'absolute', bottom: -8, right: -8, fontSize: 22, opacity: 0.5 }}>💣</span>
+          </div>
+          <div style={nameTag(view.throwerName, '#aaa')}>{view.throwerName}</div>
+          <div style={{ fontSize: 13, color: '#8a7a62', fontWeight: 'bold', letterSpacing: 1 }}>GRENADE MISSED</div>
+          <div style={{ fontSize: 10, color: '#6a5a50' }}>Detonated harmlessly</div>
+        </div>
+      );
+    }
+
+    if (view.kind === 'potion') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            {view.img && <img src={view.img} alt={view.name} style={portraitStyle('#6ab06a')} />}
+            <span style={{ position: 'absolute', bottom: -8, right: -8, fontSize: 22, filter: 'drop-shadow(0 0 6px #6ab06a)' }}>💊</span>
+          </div>
+          <div style={nameTag(view.name, '#6ab06a')}>{view.name}</div>
+          <div style={{ fontSize: 13, color: '#6ab06a', fontWeight: 'bold', letterSpacing: 1 }}>HEALING POTION</div>
+          <div style={{ fontSize: 14, color: '#6ab06a' }}>+{view.healAmount} HP</div>
+        </div>
+      );
+    }
+
+    if (view.kind === 'ration') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <div style={{ position: 'relative' }}>
+            {view.img && <img src={view.img} alt={view.name} style={portraitStyle('#c8954a')} />}
+            <span style={{ position: 'absolute', bottom: -8, right: -8, fontSize: 22, filter: 'drop-shadow(0 0 6px #c8954a)' }}>🍖</span>
+          </div>
+          <div style={nameTag(view.name, '#c8954a')}>{view.name}</div>
+          <div style={{ fontSize: 13, color: '#c8954a', fontWeight: 'bold', letterSpacing: 1 }}>FIELD RATIONS</div>
+          <div style={{ fontSize: 11, color: '#c8954a', display: 'flex', gap: 10 }}>
+            {view.hpGain > 0 && <span>+{view.hpGain} HP</span>}
+            {view.moraleGain > 0 && <span>+{view.moraleGain} morale</span>}
+          </div>
+        </div>
+      );
+    }
+
     return null;
   };
 
@@ -2086,6 +3590,10 @@ function MoraleLog({ gains, maidens, enemies, expanded, setExpanded, filter, set
 
 function BattleLogEntry({ event }: { event: CombatEvent }) {
   const color =
+    (event.type === 'log' && (event.message.startsWith('💊'))) ? '#6ab06a' :
+    (event.type === 'log' && (event.message.startsWith('🍖'))) ? '#c8954a' :
+    (event.type === 'log' || event.type === 'attack' || event.type === 'miss') &&
+      (event.message.startsWith('💣') || event.message.startsWith('💥')) ? '#e8a020' :
     event.type === 'log' ? 'var(--color-text-muted)' :
     event.type === 'attack' ? '#4a8c4a' :
     event.type === 'miss' ? '#8a7a62' :

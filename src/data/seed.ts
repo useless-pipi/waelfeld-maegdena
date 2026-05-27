@@ -53,7 +53,7 @@ export const INITIAL_SAVE: SaveData = {
     name: 'Fort Waelfeld',
     money: 100,
     food: 500,
-    beds: 20,
+    beds: 30,
     wood: 200,
     metal: 60,
     maidenCount: 15,
@@ -74,7 +74,10 @@ export const INITIAL_SAVE: SaveData = {
   inventory: [
     makeInventoryItem('light_machine_gun'),
     makeInventoryItem('heavy_machine_gun'),
+    ...Array.from({ length: 10 }, () => makeInventoryItem('revenant_bloom')),
   ],
   freeRecruitCount: 5,
   defaultTeamId: ALPHA_SQUAD_ID,
+  autoRecruit: false,
+  missionsUntilNextWave: 20,
 };

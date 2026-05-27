@@ -37,8 +37,8 @@ const FINDINGS: Finding[] = [
     detail: `FSI = Σ active maidens [ avg(STR,DEX,CON,AWR) × (currentHP / maxHP) ]
 
 Tier thresholds:
-  Rookie  FSI 0–89   → enemy quality 1–3  (Easy/Normal)
-  Trained FSI 90–159 → enemy quality 2–5  (Easy/Normal)
+  Rookie  FSI 0–89   → enemy quality 1–3  (Easy/Normal) [max Q3]
+  Trained FSI 90–159 → enemy quality 2–5  (Easy/Normal) [max Q5]
   Seasoned FSI 160+  → harder enemies begin appearing
 
 A player with exactly 10 average-stat maidens (avg power ≈ 8) sits at FSI ≈ 80 — permanently in Rookie tier.
