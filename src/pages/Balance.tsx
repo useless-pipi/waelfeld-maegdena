@@ -669,7 +669,7 @@ function EnemyChip({ enemy, onClick }: { enemy: Enemy; onClick: () => void }) {
   // Primary weapon EXP for badge display
   const weaponExpEntries = Object.entries(enemy.expData?.weapons ?? {});
   const primaryWpnExp = weaponExpEntries.find(([wt]) => wt !== 'grenade')?.[1] as { theoryExp: number; practicalExp: number } | undefined;
-  const hasGrenadeExp = !!enemy.expData?.weapons?.['grenade' as any];
+  const hasGrenadeExp = !!(enemy.expData?.weapons as Record<string, unknown> | undefined)?.['grenade'];
 
   return (
     <button

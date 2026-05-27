@@ -12,20 +12,6 @@ const _TAG_DEFS: Record<string, TagDef> = Object.fromEntries(
   (tagsData as TagDef[]).map(td => [td.id, td])
 );
 
-/** Return the effective strategy stat for a maiden, including equipment, qualification and tag bonuses. */
-function effectiveStrategy(m: Maiden): number {
-  let bonus = 0;
-  for (const eq of m.equipment)
-    for (const b of eq.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
-  for (const q of m.qualifications)
-    for (const b of q.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
-  for (const tag of m.tags) {
-    const def = _TAG_DEFS[tag.id];
-    if (def) for (const b of def.bonuses) if (b.stat === 'strategy' && !b.isPercent) bonus += b.value;
-  }
-  return m.stats.strategy + bonus;
-}
-
 /** Return the effective charm stat for a maiden, including flat equipment bonuses. */
 function effectiveCharm(m: Maiden): number {
   let bonus = 0;
@@ -435,7 +421,6 @@ function TeamCard({ team, maidens, selected, isDefault, onSelect, onDelete, onTo
   const maidenById = new Map(maidens.map((m: any) => [m.id, m]));
   const sortedIds = sortMemberIds(team.memberIds, maidens, team.leaderId);
   const members = sortedIds.map((id: string) => maidenById.get(id)).filter(Boolean);
-  const leader = maidenById.get(team.leaderId);
   return (
     <div
       onClick={onSelect}

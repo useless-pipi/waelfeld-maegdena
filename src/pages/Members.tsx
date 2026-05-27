@@ -96,7 +96,6 @@ function TagTooltip({ tagId }: { tagId: string }) {
 const CARD_W = 110;
 const CARD_H = 148;
 const GRID_GAP = 12;
-const COLS = 5;
 
 const SLOT_LABEL: Record<string, string> = {
   weapon: 'Weapon',

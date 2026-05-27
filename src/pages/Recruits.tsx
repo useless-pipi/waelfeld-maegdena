@@ -324,7 +324,6 @@ function OfficerPanel({
     canRecruit && canAfford ? 'full' : 'idle';
 
   const [line, setLine] = useState(() => pickLine(OFFICER_LINES[mood]));
-  const prevMood = useState(mood)[0];
 
   useEffect(() => {
     setLine(pickLine(OFFICER_LINES[mood]));
